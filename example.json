@@ -1,0 +1,57 @@
+{
+  "output": {
+    "mode": "separate",
+    "format": "mp4"
+  },
+  "inputs": [
+    {
+      "path": "/home/kasey/video1.mp4",
+      "automaticallyFixOverlappingText": true,
+      "timestamp": {
+        "enabled": true,
+        "useMetadataCreationTime": true,
+        "timeOffset": 0,
+        "format": "yyyy-MM-dd HH:mm:ss",
+        "font": {
+          "fontFile": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+          "size": 32,
+          "color": "white",
+          "borderColor": "black",
+          "borderWidth": 2
+        },
+        "position": {
+          "anchor": "bottomRight",
+          "xPad": 5,
+          "yPad": 5,
+          "xOffset": 16,
+          "yOffset": 16
+        }
+      },
+      "subtitles": [
+        {
+          "text": "Subtitle just for video1",
+          "start": 2.0,
+          "end": 5.0,
+          "font": {
+            "fontFile": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "size": 28,
+            "color": "white",
+            "borderColor": "black",
+            "borderWidth": 2
+          },
+          "position": {
+              "anchor": "bottomRight",
+              "xPad": 5,
+              "yPad": 5,
+              "xOffset": 16,
+              "yOffset": 16
+          },
+          "animationIn": "fade",
+          "animationOut": "fade",
+          "animationInDur": "1.0",
+          "animationOutDur": "1.0"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+##############################
+# Core .NET Build Artifacts
+##############################
+
+bin/
+obj/
+out/
+publish/
+artifacts/
+core
+*.csproj
+*.slnx
+
+# Ignore FFmpeg bundles stored in /bin or elsewhere
+ffmpeg
+ffprobe
+ffplay
+
+################################
+# Slick Edit Project files
+################################
+*.vpj
+*.vpw
+*.vpwhistuxml
+*.vpwwildcardcache
+
+###################################
+# Avalonia Designer / Build Cache
+###################################
+
+# Avalonia previewer cache & generated files
+*.axaml.cs~
+*.axaml.g.cs
+*.axaml.g.i.cs
+
+# Avalonia compiled resources
+**/obj/**/Avalonia.*.g.cs
+**/obj/**/Avalonia.*.resources
+
+##########################
+# Platform Build Outputs
+##########################
+
+# If your macos-arm64 directory is used for packaging or runtime output
+macos-arm64/
+
+##############################
+# IDE / Editor Junk
+##############################
+
+# VS / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# JetBrains Rider
+.idea/
+*.iml
+*.DotSettings.user
+
+##########################
+# NuGet / Tooling
+##########################
+
+# NuGet packages (not needed if restore is used)
+packages/
+*.nupkg
+*.snupkg
+
+# Dotnet tools local
+.dotnet/
+.tools/
+
+########################################
+# Logs / Temporary Files
+########################################
+
+*.log
+*.tmp
+*.temp
+*.cache
+*.db
+*.bak
+
+# dotnet test results
+TestResults/
+*.coverage
+*.coveragexml
+
+#######################################
+# Environment / Local Config
+#######################################
+
+appsettings.Development.json
+launchSettings.json
+
+# Your custom test file
+test.json
+
+#######################################
+# macOS / Windows OS Files
+#######################################
+
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+#######################################
+# Build Packaging Output
+#######################################
+
+# Self-contained application bundles
+*.app
+*.dmg
+*.pkg
+*.deb
+*.rpm
+
+# Published runtime folder (if created manually)
+runtime/

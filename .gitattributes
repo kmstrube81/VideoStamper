@@ -1,0 +1,80 @@
+##############################
+# Line endings & text defaults
+##############################
+
+# Normalize all text files to LF in repo
+* text=auto eol=lf
+
+# Treat common text file types explicitly
+*.cs      text diff=csharp
+*.csproj  text
+*.sln     text
+*.props   text
+*.targets text
+*.config  text
+*.json    text
+*.yml     text
+*.yaml    text
+*.xml     text
+*.axaml   text linguist-language=XML
+*.ps1     text
+*.sh      text
+*.cmd     text
+*.bat     text
+*.md      text
+*.txt     text
+
+##############################
+# Binary files
+##############################
+
+# Managed binaries & packages
+*.dll     binary
+*.exe     binary
+*.pdb     binary
+*.nupkg   binary
+*.snupkg  binary
+
+# Native tools (like bundled ffmpeg, if ever added)
+ffmpeg    binary
+ffprobe   binary
+ffplay    binary
+
+# Images & media
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.bmp     binary
+*.webp    binary
+
+# Fonts
+*.ttf     binary
+*.otf     binary
+*.woff    binary
+*.woff2   binary
+
+# Archives
+*.zip     binary
+*.7z      binary
+*.tar     binary
+*.tar.gz  binary
+*.tgz     binary
+
+##############################
+# Diff / Merge hints
+##############################
+
+# Improve diffs for C#
+*.cs diff=csharp
+
+# XAML/Avalonia: treat as XML for better diffs
+*.xaml  diff=xml
+*.axaml diff=xml
+
+# Use union merge for solution/project files to reduce conflicts
+*.sln     merge=union
+*.csproj  merge=union
+*.props   merge=union
+*.targets merge=union
