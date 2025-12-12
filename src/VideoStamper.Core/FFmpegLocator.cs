@@ -1,32 +1,45 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace VideoStamper.Core;
 
 public static class FfmpegLocator
 {
-    public static string GetFfmpegPath()
-        => GetToolPath("ffmpeg");
-
-    public static string GetFfprobePath()
-        => GetToolPath("ffprobe");
+    public static string GetFfmpegPath() => GetToolPath("ffmpeg");
+    public static string GetFfprobePath() => GetToolPath("ffprobe");
 
     private static string GetToolPath(string toolName)
     {
-        var assemblyLocation = Assembly.GetExecutingAssembly().Location;
+        string platformSubdir;
+        string exe;
+
+        if (OperatingSystem.IsWindows())
+        {
+            platformSubdir = "win-x64";
+            exe = toolName + ".exe";
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            platformSubdir = "linux-x64";
+            exe = toolName;
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            // Distinguish Intel vs Apple Silicon
+            platformSubdir = RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                ? "macos-arm64"
+                : "macos-x64";
+            exe = toolName;
+        }
+        else
+        {
+            throw new PlatformNotSupportedException("Unsupported OS for FFmpeg location.");
+        }
+
+        // You can switch this back to assembly location if you prefer
         var baseDir = Directory.GetCurrentDirectory();
-//
-//#if WINDOWS
-//        var platformSubdir = "win-x64";
-//        var exe = toolName + ".exe";
-//#else
-//        var platformSubdir = "linux-x64";
-//        var exe = toolName; // no .exe on Linux
-//#endif
-
-        var platformSubdir = "macos-arm64";
-        var exe = toolName;
-
         var path = Path.Combine(baseDir, "bin", platformSubdir, exe);
+
         if (!File.Exists(path))
             throw new FileNotFoundException($"Could not find {toolName} at {path}");
 

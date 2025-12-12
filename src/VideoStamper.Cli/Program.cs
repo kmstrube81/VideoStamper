@@ -61,6 +61,15 @@ switch (projectPath) {
             return 1;
         }
 
+        Console.WriteLine(" __      __ _     _           _____                           ");
+        Console.WriteLine(" \\ \\    / /(_)   | |         /  ___\\  _                       ");
+        Console.WriteLine("  \\ \\  / /  _  __| | ___  __ | (___  | |  __ _ _ __ ___  _ __   ___ _ __ ");
+        Console.WriteLine("   \\ \\/ /  | |/ _  |/ _ \\/  \\\\___  \\[   ]/ _' | '_ ' _ \\| '_ \\ / _ \\ '__|");
+        Console.WriteLine("    \\  /   | ||(_| || __/|()| ___) | | | |(_| | | | | | | |_) |  __/ |   ");
+        Console.WriteLine("     \\/    |_|\\___.|\\___|\\__/|_____/ |_| \\___.|_| |_| |_| .__/ \\___|_|   ");
+        Console.WriteLine("                                                        | |              ");
+        Console.WriteLine("                                                        |_|");
+
         var projectJson = await File.ReadAllTextAsync(projectPath);
 
         try

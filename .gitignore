@@ -121,3 +121,9 @@ ehthumbs.db
 
 # Published runtime folder (if created manually)
 runtime/
+
+/VideoStamper.Cli
+/*.runtimeconfig.json
+/*.deps.json
+/*.pdb
+

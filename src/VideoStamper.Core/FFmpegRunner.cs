@@ -17,7 +17,7 @@ public static class FfmpegRunner
             FileName = ffprobe,
             ArgumentList =
             {
-                "-v", "quiet",
+                "-v", Globals.DEBUG > 2 ? "info" : "quiet",
                 "-print_format", "json",
                 "-select_streams", "v:0",
                 "-show_entries", "stream",
@@ -29,6 +29,7 @@ public static class FfmpegRunner
             UseShellExecute = false
         };
 
+        // Debug prints only if DEBUG >= 3
         if (Globals.DEBUG > 2)
         {
             string cmd = FormatCommand(ffprobe, psi.ArgumentList);
@@ -38,8 +39,13 @@ public static class FfmpegRunner
         using var proc = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start ffprobe");
 
-        var output = await proc.StandardOutput.ReadToEndAsync(cancellationToken);
-        var error = await proc.StandardError.ReadToEndAsync(cancellationToken);
+        // If DEBUG < 3, suppress stderr entirely
+        string error = Globals.DEBUG > 2
+            ? await proc.StandardError.ReadToEndAsync(cancellationToken)
+            : await DiscardStreamAsync(proc.StandardError, cancellationToken);
+
+        // Always read stdout (we need the JSON)
+        string output = await proc.StandardOutput.ReadToEndAsync(cancellationToken);
 
         await proc.WaitForExitAsync(cancellationToken);
 
@@ -69,6 +75,7 @@ public static class FfmpegRunner
         foreach (var arg in arguments)
             psi.ArgumentList.Add(arg);
 
+        // Debug-only command echo
         if (Globals.DEBUG > 2)
         {
             string cmd = FormatCommand(ffmpeg, psi.ArgumentList);
@@ -78,12 +85,21 @@ public static class FfmpegRunner
         using var proc = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start ffmpeg");
 
-        // read stderr for progress/messages
-        while (!proc.HasExited)
+        if (Globals.DEBUG > 2)
         {
-            var line = await proc.StandardError.ReadLineAsync();
-            if (line == null) break;
-            log?.Report(line);
+            // Normal debug mode: report stderr to progress logger
+            while (!proc.HasExited)
+            {
+                var line = await proc.StandardError.ReadLineAsync();
+                if (line == null) break;
+                log?.Report(line);
+            }
+        }
+        else
+        {
+            // Silent mode: fully discard stderr so ffmpeg does not block
+            _ = Task.Run(() => DiscardStreamAsync(proc.StandardError, cancellationToken));
+            _ = Task.Run(() => DiscardStreamAsync(proc.StandardOutput, cancellationToken));
         }
 
         await proc.WaitForExitAsync(cancellationToken);
@@ -94,6 +110,24 @@ public static class FfmpegRunner
         }
     }
 
+    private static async Task<string> DiscardStreamAsync(
+        StreamReader reader,
+        CancellationToken token)
+    {
+        char[] buffer = new char[4096];
+
+        while (!token.IsCancellationRequested)
+        {
+            int read = await reader.ReadAsync(buffer, 0, buffer.Length);
+
+            if (read == 0) // EOF reached
+                break;
+        }
+
+        return "";
+    }
+
+
     private static string FormatCommand(string fileName, IEnumerable<string> args)
     {
         var sb = new StringBuilder();
@@ -101,7 +135,6 @@ public static class FfmpegRunner
 
         foreach (var arg in args)
         {
-            // Quote args with spaces
             if (arg.Contains(' '))
                 sb.Append(" \"" + arg + "\"");
             else
