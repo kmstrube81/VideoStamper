@@ -73,81 +73,169 @@ public static class FilterBuilder
         VideoMetadata meta
     )
     {
-        // 1. Decide the timestamp value
-        DateTime? dt = null;
+        // 1. Decide the base Unix epoch for %{pts:gmtime:...}
+        long unixEpoch = 0;
+        bool hasTimestamp = false;
 
         // (a) Try metadata creation_time first, if allowed
-        if (ts.UseMetadataCreationTime && !string.IsNullOrEmpty(meta.CreationTimeRaw))
+        if (ts.UseMetadataCreationTime && !string.IsNullOrWhiteSpace(meta.CreationTimeRaw))
         {
-            if (DateTime.TryParse(
+            if (Globals.DEBUG > 0)
+            {
+                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Raw creation time: {meta.CreationTimeRaw}");
+            }
+
+            // Prefer a timezone-aware parse
+            if (DateTimeOffset.TryParse(
                     meta.CreationTimeRaw,
                     CultureInfo.InvariantCulture,
-                    DateTimeStyles.AdjustToUniversal,
-                    out var parsedUtc))
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                    out var dto))
             {
-                dt = parsedUtc.ToLocalTime();
+                // dto represents an instant with an offset (e.g. 2025-11-01T11:01:08-05:00).
+                //
+                // drawtext/strftime interprets the epoch strictly as UTC when using gmtime.
+                // To get the *wall-clock time* of the original timezone, we treat the local
+                // wall time as if it were UTC by shifting the epoch by the offset:
+                //
+                //   epochLocalAsUtc = epochUtc + offsetSeconds
+                //
+                // So gmtime(epochLocalAsUtc) prints the local wall time.
+                long offsetSeconds = (long)dto.Offset.TotalSeconds;
+                unixEpoch = dto.ToUnixTimeSeconds() + offsetSeconds;
+                hasTimestamp = true;
+
+                if (Globals.DEBUG > 1)
+                {
+                    Console.WriteLine(
+                        $"{Globals.DEBUG_LEVEL}: Parsed zoned timestamp = {dto.LocalDateTime} " +
+                        $"(offset {dto.Offset}), unixEpoch (wall clock) = {unixEpoch}");
+                }
+            }
+            // Fallback: no explicit offset in the string, treat it as local time
+            else if (DateTime.TryParse(
+                         meta.CreationTimeRaw,
+                         CultureInfo.InvariantCulture,
+                         DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                         out var dtLocal))
+            {
+                var dtoLocal = new DateTimeOffset(dtLocal);
+                long offsetSeconds = (long)dtoLocal.Offset.TotalSeconds;
+                unixEpoch = dtoLocal.ToUnixTimeSeconds() + offsetSeconds;
+                hasTimestamp = true;
+
+                if (Globals.DEBUG > 1)
+                {
+                    Console.WriteLine(
+                        $"{Globals.DEBUG_LEVEL}: Parsed local timestamp = {dtLocal} " +
+                        $"(offset {dtoLocal.Offset}), unixEpoch (wall clock) = {unixEpoch}");
+                }
             }
         }
 
         // (b) If that failed, use TimeOffset (seconds since Unix epoch)
-        if (dt == null && ts.TimeOffset.HasValue)
+        if (ts.TimeOffset.HasValue)
         {
             try
             {
-                // TimeOffset is seconds from 1970-01-01T00:00:00Z
-                var dto = DateTimeOffset.FromUnixTimeSeconds(ts.TimeOffset.Value);
-                dt = dto.ToLocalTime().DateTime;
+                // TimeOffset is already "seconds from 1970-01-01T00:00:00Z"
+                unixEpoch += ts.TimeOffset.Value;
+                hasTimestamp = true;
+
+                if (Globals.DEBUG > 1)
+                {
+                    Console.WriteLine(
+                        $"{Globals.DEBUG_LEVEL}: Using TimeOffset = {ts.TimeOffset.Value}, unixEpoch = {unixEpoch}");
+                }
             }
             catch (ArgumentOutOfRangeException)
             {
-                // Invalid offset; leave dt as null and we'll fall back to "NO_DATE"
+                if (Globals.DEBUG > 0)
+                {
+                    Console.WriteLine(
+                        $"{Globals.DEBUG_LEVEL}: Invalid TimeOffset {ts.TimeOffset.Value}, falling back to 0");
+                }
             }
         }
 
-        long unixEpoch = (dt is DateTime realDt)
-            ? new DateTimeOffset(realDt).ToUnixTimeSeconds()
-            : 0;
+        if (!hasTimestamp && Globals.DEBUG > 0)
+        {
+            Console.WriteLine(
+                $"{Globals.DEBUG_LEVEL}: No usable timestamp found; unixEpoch will be 0 (NO_DATE).");
+        }
 
         if (Globals.DEBUG > 1)
             Console.WriteLine($"{Globals.DEBUG_LEVEL}: Unix epoch = {unixEpoch}");
 
-
         string ffmpegFormat = ConvertTimeFormat(ts.Format);
 
         // 2. Support multi-line format strings
-        ffmpegFormat = ffmpegFormat.Replace("'", "\\'")     // escape single quotes
-                   .Replace("\\", "\\\\\\\\")                   // escape backslashes
-                   .Replace(":", "\\\\\\:")                    // escape colons for filter syntax
-                   .Replace(",", "\\\\,")                     //escape commas
-                   .Replace("/","\\\\/");                     //escape forward slash
-        
-        string[] newlines = ffmpegFormat.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
- 
+        ffmpegFormat = ffmpegFormat.Replace("'", "\\'")      // escape single quotes
+                                   .Replace("\\", "\\\\\\\\") // escape backslashes
+                                   .Replace(":", "\\\\\\:")   // escape colons for filter syntax
+                                   .Replace(",", "\\\\,")     // escape commas
+                                   .Replace("/", "\\\\/");    // escape forward slash
+
+        string[] newlines = ffmpegFormat.Split(
+            Environment.NewLine,
+            StringSplitOptions.RemoveEmptyEntries
+        );
+
         var drawTexts = new Dictionary<string, List<DrawText>>();
 
-        foreach(string format in newlines ) {
-
-            //Format String
-            string text = "%{pts\\:gmtime\\:"+unixEpoch+"\\:"+format+"}";
+        foreach (string format in newlines)
+        {
+            // Format string
+            string text = "%{pts\\:gmtime\\:" + unixEpoch + "\\:" + format + "}";
 
             // 3. Position based on anchor
             var pos = ts.Position;
-            var (xExpr, yExpr) = AnchorToExpressions(pos.Anchor, meta.Width, meta.Height, ts.Font.Size, pos.XOffset, pos.YOffset, pos.XPad, pos.YPad);
-            var (xCoord, yCoord) = AnchorToEvaluated(pos.Anchor, meta.Width, ts.Font.Size * 0.5 * format.Length, meta.Height, ts.Font.Size, pos.XOffset, pos.YOffset, pos.XPad, pos.YPad);
-            DrawText filter = new DrawText(text, ts.Font.FontFile, ts.Font.Size, ts.Font.Color, xExpr, yExpr);
+            var (xExpr, yExpr) = AnchorToExpressions(
+                pos.Anchor,
+                meta.Width,
+                meta.Height,
+                ts.Font.Size,
+                pos.XOffset,
+                pos.YOffset,
+                pos.XPad,
+                pos.YPad
+            );
+
+            var (xCoord, yCoord) = AnchorToEvaluated(
+                pos.Anchor,
+                meta.Width,
+                ts.Font.Size * 0.5 * format.Length,
+                meta.Height,
+                ts.Font.Size,
+                pos.XOffset,
+                pos.YOffset,
+                pos.XPad,
+                pos.YPad
+            );
+
+            DrawText filter = new DrawText(
+                text,
+                ts.Font.FontFile,
+                ts.Font.Size,
+                ts.Font.Color,
+                xExpr,
+                yExpr
+            );
 
             if (!string.IsNullOrEmpty(ts.Font.BorderColor) && ts.Font.BorderWidth.HasValue)
             {
                 filter.BorderColor = ts.Font.BorderColor;
                 filter.BorderWidth = ts.Font.BorderWidth;
             }
+
             filter.XCoord = (int)xCoord;
             filter.YCoord = (int)yCoord;
             filter.AddToList(drawTexts, pos.Anchor);
-            
         }
+
         return drawTexts;
     }
+
 
     private static Dictionary<string, List<DrawText>> BuildSubtitleFilter(
         SubtitleSettings sub,
@@ -175,7 +263,7 @@ public static class FilterBuilder
             var (xExpr, yExpr) = AnchorToExpressions(pos.Anchor, meta.Width, meta.Height, sub.Font.Size, pos.XOffset, pos.YOffset, pos.XPad, pos.YPad);
             var (xCoord, yCoord) = AnchorToEvaluated(pos.Anchor, meta.Width, sub.Font.Size * 0.5 * newtext.Length, meta.Height, sub.Font.Size, pos.XOffset, pos.YOffset, pos.XPad, pos.YPad);
 
-            DrawText filter = new DrawText(text, sub.Font.FontFile, sub.Font.Size, sub.Font.Color, xExpr, yExpr);
+            DrawText filter = new DrawText(newtext, sub.Font.FontFile, sub.Font.Size, sub.Font.Color, xExpr, yExpr);
 
             if (!string.IsNullOrEmpty(sub.Font.BorderColor) && sub.Font.BorderWidth.HasValue)
             {
