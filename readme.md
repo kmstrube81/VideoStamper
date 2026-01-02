@@ -34,7 +34,7 @@ ffmpeg and ffprobe need to be downloaded and their location specified in the pro
 ### Planned Features (not yet implemented)
 * Releases for other platforms. (Windows/Linux)
 * Text animations
-* Concatenating multiple videos together
+* Auto Update/Auto Download for ffmpeg/VideoStamper
 
 ```
  _____________________                    
