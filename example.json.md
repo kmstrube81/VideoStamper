@@ -1,5 +1,10 @@
 ```json
 {
+  "name": "Example Project",
+  "tools": {                                                                    //specify where ffmpeg tools are stored
+    "ffmpegPath": "/Path/to/ffmpeg",                                            //FFMpeg path
+    "ffprobePath": "/Path/to/ffprobe"                                           //FFProbe path
+  },
   "output": {               //specify output settings first
     "mode": "separate",     //proccessing mode. valid values: "separate" (process each file seperately) or "concat" (combine into one big file)
     "format": "mp4"         //output format. valid values: "mp4", "webm", "gif"
