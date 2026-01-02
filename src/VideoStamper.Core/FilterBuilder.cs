@@ -273,6 +273,8 @@ public static class FilterBuilder
 
             filter.XCoord = (int)xCoord;
             filter.YCoord = (int)yCoord;
+            filter.Start = sub.Start;
+            filter.End = sub.End;
             filter.AddToList(drawTexts, pos.Anchor);
         }
         return drawTexts;

@@ -74,7 +74,8 @@ switch (projectPath) {
 
         try
         {
-            var result = await ProjectProcessor.ProcessProjectAsync(projectJson, projectPath);
+            var progress = new Progress<string>(s => Console.WriteLine(s));
+            var result = await ProjectProcessor.ProcessProjectAsync(projectJson, projectPath, CancellationToken.None, progress);
 
             Console.WriteLine(result.Message);
             return result.Success ? 0 : 1;

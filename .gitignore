@@ -7,6 +7,7 @@ obj/
 out/
 publish/
 artifacts/
+fonts/
 core
 *.csproj
 *.slnx

@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VideoStamper.Gui.OutputWindow"
+        Title="VideoStamper Output"
+        Width="800" Height="500">
+    <ScrollViewer>
+        <TextBox x:Name="OutputTextBox"
+                 AcceptsReturn="True"
+                 IsReadOnly="True"
+                 TextWrapping="Wrap"
+                 FontFamily="Consolas, Menlo, monospace" />
+    </ScrollViewer>
+</Window>
+

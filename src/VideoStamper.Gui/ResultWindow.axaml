@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="VideoStamper.Gui.ResultWindow"
+        Title="VideoStamper Result"
+        Width="500" Height="200"
+        WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="16" Spacing="12">
+        <TextBlock x:Name="MessageTextBlock"
+                   TextWrapping="Wrap" />
+        <Button Content="OK"
+                HorizontalAlignment="Right"
+                Width="100"
+                Click="OkButton_OnClick" />
+    </StackPanel>
+</Window>
+

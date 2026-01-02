@@ -135,6 +135,19 @@ public sealed class InputSettings
 }
 
 /* ****************************************************************************************************
+*   FFmpegToolSettings
+*   ---
+*   FfmpegPath - string for the path to ffmpeg
+*   FfprobePath - string for the path to ffprobe
+******************************************************************************************************* */
+public sealed class FfmpegToolSettings
+{
+    public string? FfmpegPath { get; set; }
+    public string? FfprobePath { get; set; }
+}
+
+
+/* ****************************************************************************************************
 *   ProjectSettings
 *   ---
 *   Output - OutputSettings, the output settings for the files to be processed
@@ -144,4 +157,5 @@ public sealed class ProjectSettings
 {
     public OutputSettings Output { get; set; } = new();
     public List<InputSettings> Inputs { get; set; } = new();
+    public FfmpegToolSettings? Tools { get; set; } = new();
 }

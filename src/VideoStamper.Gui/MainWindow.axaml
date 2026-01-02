@@ -1,0 +1,838 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:models="clr-namespace:VideoStamper.Gui.Models"
+	xmlns:local="clr-namespace:VideoStamper.Gui"
+        x:Class="VideoStamper.Gui.MainWindow"
+        Title="Video Stamper"
+        Width="900" Height="650"
+	Icon="Assets/VideoStamper.ico">
+	<Window.Resources>
+	    <local:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+	</Window.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+	<Border Grid.Column="0"
+            BorderBrush="#404040"
+            BorderThickness="0,0,1,0"
+            Padding="8">
+		<!-- LEFT: Inputs -->
+		<StackPanel Grid.Column="0" Margin="8" Spacing="8">
+		    <TextBlock Text="Inputs" FontWeight="Bold" />
+		    <ListBox x:Name="InputListBox"
+			     Height="300"
+			     SelectionChanged="InputListBox_OnSelectionChanged"
+			     HorizontalAlignment="Stretch">
+			<ListBox.ItemTemplate>
+			    <DataTemplate x:DataType="models:InputSettings">
+				<!-- Only filename + extension -->
+				<TextBlock Text="{Binding FileName}" />
+			    </DataTemplate>
+			</ListBox.ItemTemplate>
+		    </ListBox>
+
+		    <StackPanel Orientation="Horizontal" Spacing="4">
+			<Button Content="Add" Click="AddInput_OnClick" Width="60"/>
+			<Button Content="Remove" Click="RemoveInput_OnClick" Width="80"/>
+			<Button Content="Up" Click="MoveInputUp_OnClick" Width="40"/>
+			<Button Content="Down" Click="MoveInputDown_OnClick" Width="60"/>
+		    </StackPanel>
+		</StackPanel>
+	</Border>
+        <!-- RIGHT: settings -->
+        <ScrollViewer Grid.Column="1" Margin="16,8,8,8">
+            <StackPanel Margin="16" Spacing="8">
+                <!-- Project settings -->
+                <TextBlock Text="Project settings"
+                           FontWeight="Bold"
+                           Margin="0,8,0,0" />
+
+                <!-- Project name -->
+                <StackPanel Margin="0,4,0,0">
+                    <TextBlock Text="Project name:"
+                               Margin="0,0,0,2" />
+                    <TextBox x:Name="ProjectNameTextBox"
+	        	 Width="250"
+			 HorizontalAlignment="Left"
+			 HorizontalContentAlignment="Left"/>
+
+                </StackPanel>
+
+                <!-- Output mode / format -->
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto">
+                    <!-- Mode -->
+                    <StackPanel Grid.Column="0" Margin="0,4,8,0">
+                        <TextBlock Text="Render Mode:"
+                                   Margin="0,0,0,2" />
+                        <ComboBox x:Name="OutputModeComboBox"
+				  HorizontalAlignment="Stretch"
+                                  SelectedIndex="0">
+                            <ComboBox.Items>
+                                <x:String>Separate</x:String>
+                                <x:String>Concatenate</x:String>
+                            </ComboBox.Items>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- Format -->
+                    <StackPanel Grid.Column="1" Margin="16,4,0,0">
+                        <TextBlock Text="Format:"
+                                   Margin="0,0,0,2" />
+                        <ComboBox x:Name="OutputFormatComboBox"
+				  HorizontalAlignment="Stretch"
+                                  SelectedIndex="0">
+                            <ComboBox.Items>
+                                <x:String>mp4</x:String>
+                                <x:String>webm</x:String>
+                                <x:String>gif</x:String>
+                            </ComboBox.Items>
+                        </ComboBox>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Selected input video (read-only, no Browse) -->
+                <TextBlock Text="Selected input video" FontWeight="Bold"/>
+                <TextBox x:Name="InputPathTextBox"
+                         IsReadOnly="True" />
+
+		<Separator Margin="0,8,0,8"/>
+
+                <CheckBox x:Name="AutoFixOverlapCheckBox"
+                          IsChecked="True"
+                          Content="Attempt to fix overlapping text automatically" />
+
+                <Separator Margin="0,8,0,8"/>
+
+                <!-- Timestamp settings -->
+                <TextBlock Text="Timestamp" FontWeight="Bold" />
+                <CheckBox x:Name="TimestampEnabledCheckBox"
+			  IsChecked="False"
+			  IsEnabled="False"
+			  Content="Enable timestamp" />
+
+		<StackPanel IsVisible="{Binding IsChecked, ElementName=TimestampEnabledCheckBox}" Spacing="4">
+			<CheckBox x:Name="UseMetadataCheckBox"
+			  IsChecked="True"
+			  IsVisible="False"
+			  IsHitTestVisible="False" />
+
+			<!-- Timestamp layout with 5 equal columns -->
+			<Grid ColumnDefinitions="*,*,*,*,*"
+			      RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+
+			    <!-- Row 0: Format + Date (Month / Day / Year) -->
+			    <!-- Format (spans 2 columns) -->
+			    <StackPanel Grid.Row="0"
+					Grid.Column="0"
+					Grid.ColumnSpan="2"
+					Margin="0,4,8,0">
+				<TextBlock Text="Format"
+					   Margin="0,0,0,2" />
+				<TextBox x:Name="TimestampFormatTextBox"
+					 AcceptsReturn="True"
+					 MaxLines="1"
+					 Text="yyyy-MM-dd HH:mm:ss" />
+			    </StackPanel>
+
+			    <!-- Month -->
+			    <StackPanel Grid.Row="0"
+					Grid.Column="2"
+					Margin="0,4,4,0">
+				<TextBlock Text="Month"
+					   Margin="0,0,0,2" />
+				<NumericUpDown x:Name="TimestampMonthTextBox"
+				       Minimum="1" Maximum="12"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Left" />
+
+			    </StackPanel>
+
+			    <!-- Day -->
+			    <StackPanel Grid.Row="0"
+					Grid.Column="3"
+					Margin="0,4,4,0">
+				<TextBlock Text="Day"
+					   Margin="0,0,0,2" />
+				<NumericUpDown x:Name="TimestampDayTextBox"
+				       Minimum="1" Maximum="31"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Left" />
+
+			    </StackPanel>
+
+			    <!-- Year -->
+			    <StackPanel Grid.Row="0"
+					Grid.Column="4"
+					Margin="0,4,0,0">
+				<TextBlock Text="Year"
+					   Margin="0,0,0,2" />
+				<NumericUpDown x:Name="TimestampYearTextBox"
+				       Increment="1"
+				       Width="80"
+				       HorizontalAlignment="Left" />
+			    </StackPanel>
+
+			    <!-- Row 1: Time (Hour / Minute / Second / AM/PM) -->
+			    <StackPanel Grid.Row="1"
+					Grid.Column="0"
+					Margin="0,4,4,0">
+				<TextBlock Text="Hour"
+					   Margin="0,0,0,2" />
+				<NumericUpDown x:Name="TimestampHourTextBox"
+				       Minimum="0" Maximum="23"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Left" />
+			    </StackPanel>
+
+			    <StackPanel Grid.Row="1"
+					Grid.Column="1"
+					Margin="0,4,4,0">
+				<TextBlock Text="Minute"
+					   Margin="0,0,0,2" />
+				<NumericUpDown x:Name="TimestampMinuteTextBox"
+				       Minimum="0" Maximum="59"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Left" />
+			    </StackPanel>
+
+			    <StackPanel Grid.Row="1"
+					Grid.Column="2"
+					Margin="0,4,4,0">
+				<TextBlock Text="Second"
+					   Margin="0,0,0,2" />
+				<NumericUpDown x:Name="TimestampSecondTextBox"
+				       Minimum="0" Maximum="59"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Left" />
+			    </StackPanel>
+
+			    <!-- AM/PM spanning 2 columns -->
+			    <StackPanel Grid.Row="1"
+					Grid.Column="3"
+					Margin="0,4,0,0">
+				<TextBlock Text="AM/PM"
+					   Margin="0,0,0,2" />
+				<ComboBox x:Name="TimestampAmPmComboBox"
+					  MinWidth="90">
+				    <ComboBoxItem Content="AM" />
+				    <ComboBoxItem Content="PM" />
+				</ComboBox>
+			    </StackPanel>
+
+			    <!-- Row 2: Reset button (full width row) -->
+			    <StackPanel Grid.Row="1"
+					Grid.Column="4"
+					Margin="0,4,0,4">
+				<TextBlock Text=""
+					   Margin="0,0,0,2" />
+				<Button x:Name="ResetTimestampButton"
+					Content="Reset"
+					VerticalAlignment="Center"
+					Click="ResetTimestamp_OnClick" />
+			    </StackPanel>
+
+			    <!-- Row 3: Font + size + colors -->
+			    <!-- Font (spans 2 columns) -->
+			    <StackPanel Grid.Row="2"
+					Grid.Column="0"
+					Grid.ColumnSpan="2"
+					Margin="0,4,8,0">
+				<TextBlock Text="Font"
+					   Margin="0,0,0,2" />
+				<ComboBox x:Name="FontFileComboBox"
+					  HorizontalAlignment="Stretch" />
+			    </StackPanel>
+
+			    <!-- Font color -->
+			    <StackPanel Grid.Row="2"
+					Grid.Column="2"
+					Grid.ColumnSpan="2"
+					Margin="0,4,8,0">
+				<TextBlock Text="Font color:"
+					   Margin="0,0,0,2" />
+				<ComboBox x:Name="FontColorTextBox"
+					  HorizontalAlignment="Stretch"
+					  SelectedIndex="0">
+				    <ComboBox.Items>
+					<x:String>White</x:String>
+					<x:String>Black</x:String>
+					<x:String>Gray</x:String>
+					<x:String>Brown</x:String>
+					<x:String>Blue</x:String>
+					<x:String>Purple</x:String>
+					<x:String>Pink</x:String>
+					<x:String>Red</x:String>
+					<x:String>Orange</x:String>
+					<x:String>Yellow</x:String>
+					<x:String>Green</x:String>
+				    </ComboBox.Items>
+				</ComboBox>
+			    </StackPanel>
+
+			    <!-- Font size -->
+			    <StackPanel Grid.Row="2"
+					Grid.Column="4"
+					Margin="0,4,8,0">
+				<TextBlock Text="Size"
+					   Margin="0,0,0,2" />
+				<NumericUpDown x:Name="FontSizeTextBox"
+				       Minimum="1"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Left" />
+			    </StackPanel>
+
+			    <!-- Border color -->
+			    <StackPanel Grid.Row="3"
+					Grid.Column="0"
+					Grid.ColumnSpan="2"
+					Margin="0,4,8,0">
+				<TextBlock Text="Border color:"
+					   Margin="0,0,0,2" />
+				<ComboBox x:Name="FontBorderColorTextBox"
+					  ItemsSource="{Binding BorderColorOptions, RelativeSource={RelativeSource AncestorType=local:MainWindow}}"
+					  HorizontalAlignment="Stretch"
+					  SelectedIndex="1" />
+
+			    </StackPanel>
+
+			    <!-- Row 4: Border width -->
+			    <StackPanel Grid.Row="3"
+					Grid.Column="2"
+					Margin="0,4,0,0">
+				<TextBlock Text="Border Width"
+					   Margin="0,0,0,2" />
+				<NumericUpDown x:Name="FontBorderWidthTextBox"
+				       Minimum="1"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Left" />
+			    </StackPanel>
+
+			    <StackPanel Grid.Row="3"
+					    Grid.Column="3"
+					    Grid.ColumnSpan="2"
+					    Margin="0,4,0,0">
+				    <TextBlock Text=""
+					   Margin="0,0,0,2" />
+				    <Button x:Name="AddCustomFontButton"
+					    Content="Add Custom Font"
+					    HorizontalAlignment="Left"
+					    Click="AddCustomFontButton_OnClick" />
+			   </StackPanel>
+
+			    <!-- Row 5: Position / padding / offset -->
+			    <!-- Position (anchor) -->
+			    <StackPanel Grid.Row="4"
+					Grid.Column="0"
+					Margin="0,4,8,0">
+				<TextBlock Text="Position"
+					   Margin="0,0,0,2" />
+				<ComboBox x:Name="AnchorComboBox"
+					  HorizontalAlignment="Stretch"
+					  SelectedIndex="0">
+				    <ComboBox.Items>
+					<x:String>Origin</x:String>
+					<x:String>Top Left</x:String>
+					<x:String>Top Middle</x:String>
+					<x:String>Top Right</x:String>
+					<x:String>Middle Left</x:String>
+					<x:String>Middle</x:String>
+					<x:String>Middle Right</x:String>
+					<x:String>Bottom Left</x:String>
+					<x:String>Bottom Middle</x:String>
+					<x:String>Bottom Right</x:String>
+				    </ComboBox.Items>
+				</ComboBox>
+			    </StackPanel>
+
+			    <!-- X padding -->
+			    <StackPanel Grid.Row="4"
+					Grid.Column="1"
+					Margin="0,4,4,0">
+				<TextBlock Text="X padding"
+					   Margin="0,0,0,2"
+					   HorizontalAlignment="Center" />
+				<NumericUpDown x:Name="XPadTextBox"
+				       Minimum="0" Maximum="100"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Center" />
+			    </StackPanel>
+
+			    <!-- Y padding -->
+			    <StackPanel Grid.Row="4"
+					Grid.Column="2"
+					Margin="0,4,4,0">
+				<TextBlock Text="Y padding"
+					   Margin="0,0,0,2" 
+					   HorizontalAlignment="Center" />
+				<NumericUpDown x:Name="YPadTextBox"
+				       Minimum="0" Maximum="100"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Center" />
+			    </StackPanel>
+
+			    <!-- X offset -->
+			    <StackPanel Grid.Row="4"
+					Grid.Column="3"
+					Margin="0,4,4,0">
+				<TextBlock Text="X offset"
+					   Margin="0,0,0,2" 
+					   HorizontalAlignment="Center" />
+				<NumericUpDown x:Name="XOffsetTextBox"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Center" />
+			    </StackPanel>
+
+			    <!-- Y offset -->
+			    <StackPanel Grid.Row="4"
+					Grid.Column="4"
+					Margin="0,4,0,0">
+				<TextBlock Text="Y offset"
+					   Margin="0,0,0,2"
+					   HorizontalAlignment="Center" />
+				<NumericUpDown x:Name="YOffsetTextBox"
+				       Increment="1"
+				       Width="60"
+				       HorizontalAlignment="Center" />
+			    </StackPanel>
+
+			</Grid>
+		</StackPanel>
+		<StackPanel>
+			<Button x:Name="AddSubtitleButton"
+				Margin="0,12,0,0"
+				HorizontalAlignment="Left"
+				Content="Add subtitle"
+				Click="AddSubtitle_OnClick"
+				IsVisible="False" />
+		</StackPanel>
+                <Separator Margin="0,8,0,8"/>
+		<ItemsControl x:Name="SubtitlesItemsControl"
+		      Margin="0,8,0,0">
+		    <ItemsControl.ItemTemplate>
+			<DataTemplate x:DataType="models:SubtitleSettings">
+				<StackPanel>
+				    <Border Margin="0,8,0,0"
+					    Padding="8"
+					    BorderThickness="1"
+					    CornerRadius="4">
+					<Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+					      ColumnDefinitions="*,*,*,*,*,*,*,*,*,*">
+					     <!-- Row 0: subtitle text / start / duration -->
+					    <StackPanel Grid.Row="0"
+							Grid.Column="0"
+							Grid.ColumnSpan="6"
+							Margin="0,4,8,0">
+						<TextBlock Text="Subtitle Text"
+							   Margin="0,0,0,2" />
+						<TextBox   AcceptsReturn="True"
+							   MaxLines="1"
+							   Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+					    <StackPanel Grid.Row="0"
+							Grid.Column="6"
+							Grid.ColumnSpan="2"
+							Margin="0,4,8,0">
+						<TextBlock Text="Start Time (s)"
+							   Margin="0,0,0,2" />
+						<NumericUpDown Minimum="0"
+						       Increment="1"
+						       Value="{Binding Start, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+					    <StackPanel Grid.Row="0"
+							Grid.Column="8"
+							Grid.ColumnSpan="2"
+							Margin="0,4,8,0">
+						<TextBlock Text="Duration (s)"
+							   Margin="0,0,0,2" />
+						<NumericUpDown Minimum="0"
+						       Increment="1"
+						       Value="{Binding Duration, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+					    <!-- Row 1: Animations -->
+					    <StackPanel Grid.Row="1"
+							Grid.Column="0"
+							Grid.ColumnSpan="3"
+							Margin="0,4,8,0">
+						<TextBlock Text="In Animation"
+							   Margin="0,0,0,2" />
+						<ComboBox SelectedItem="{Binding InAnimation, Mode=TwoWay}"
+							IsEnabled="False">
+							<x:String>None</x:String>
+							<x:String>Fade In</x:String>
+							<x:String>Fly In from Top Left</x:String>
+							<x:String>Fly In from Top</x:String>
+							<x:String>Fly In from Top Right</x:String>
+							<x:String>Fly In from Left</x:String>
+							<x:String>Fly In from Right</x:String>
+							<x:String>Fly In from Bottom Left</x:String>
+							<x:String>Fly In from Bottom</x:String>
+							<x:String>Fly In from Bottom Right</x:String>
+						</ComboBox>
+					    </StackPanel>
+					    <StackPanel Grid.Row="1"
+							Grid.Column="3"
+							Grid.ColumnSpan="2"
+							Margin="0,4,8,0">
+						<TextBlock Text="Duration (s)"
+							   Margin="0,0,0,2" />
+						<NumericUpDown  IsEnabled="False"
+								Minimum="0"
+								Increment="1"
+								Value="{Binding InAnimationDuration, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+					    <StackPanel Grid.Row="1"
+							Grid.Column="5"
+							Grid.ColumnSpan="3"
+							Margin="0,4,8,0">
+						<TextBlock Text="Out Animation"
+							   Margin="0,0,0,2" />
+						<ComboBox SelectedItem="{Binding OutAnimation, Mode=TwoWay}"
+							IsEnabled="False">
+							<x:String>None</x:String>
+							<x:String>Fade Out</x:String>
+							<x:String>Fly Out from Top Left</x:String>
+							<x:String>Fly Out from Top</x:String>
+							<x:String>Fly Out from Top Right</x:String>
+							<x:String>Fly Out from Left</x:String>
+							<x:String>Fly Out from Right</x:String>
+							<x:String>Fly Out from Bottom Left</x:String>
+							<x:String>Fly Out from Bottom</x:String>
+							<x:String>Fly Out from Bottom Right</x:String>
+						</ComboBox>
+					    </StackPanel>
+					    <StackPanel Grid.Row="1"
+							Grid.Column="8"
+							Grid.ColumnSpan="2"
+							Margin="0,4,8,0">
+						<TextBlock Text="Duration (s)"
+							   Margin="0,0,0,2" />
+						<NumericUpDown  IsEnabled="False"
+								Minimum="0"
+								Increment="1"
+								Value="{Binding OutAnimationDuration, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+					    <!-- Row 2: Font + size + colors -->
+					    <!-- Font (spans 2 columns) -->
+					    <StackPanel Grid.Row="2"
+							Grid.Column="0"
+							Grid.ColumnSpan="4"
+							Margin="0,4,8,0">
+						<TextBlock Text="Font"
+							   Margin="0,0,0,2" />
+						<ComboBox x:CompileBindings="False"
+							  HorizontalAlignment="Stretch"
+							  ItemsSource="{Binding FontOptions,
+							  RelativeSource={RelativeSource AncestorType=local:MainWindow}}"
+							  DisplayMemberBinding="{Binding Name}"
+							  SelectedItem="{Binding Font.SelectedFontOption, Mode=TwoWay}"
+							  SelectionChanged="SubtitleFontComboBox_OnSelectionChanged" />
+
+
+					    </StackPanel>
+
+					    <!-- Font color -->
+					    <StackPanel Grid.Row="2"
+							Grid.Column="4"
+							Grid.ColumnSpan="4"
+							Margin="0,4,8,0">
+						<TextBlock Text="Font color:"
+							   Margin="0,0,0,2" />
+						<ComboBox HorizontalAlignment="Stretch"
+							  SelectedItem="{Binding Font.Color, Mode=TwoWay}">
+						    <ComboBox.Items>
+							<x:String>White</x:String>
+							<x:String>Black</x:String>
+							<x:String>Gray</x:String>
+							<x:String>Brown</x:String>
+							<x:String>Blue</x:String>
+							<x:String>Purple</x:String>
+							<x:String>Pink</x:String>
+							<x:String>Red</x:String>
+							<x:String>Orange</x:String>
+							<x:String>Yellow</x:String>
+							<x:String>Green</x:String>
+						    </ComboBox.Items>
+						</ComboBox>
+					    </StackPanel>
+
+					    <!-- Font size -->
+					    <StackPanel Grid.Row="2"
+							Grid.Column="8"
+							Grid.ColumnSpan="2"
+							Margin="0,4,8,0">
+						<TextBlock Text="Size"
+							   Margin="0,0,0,2" />
+						<NumericUpDown Minimum="1"
+						       Increment="1"
+						       Width="60"
+						       HorizontalAlignment="Left"
+						       Value="{Binding Font.Size, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+					    <!-- Row 3: Border -->
+					    <!-- Border color -->
+					    <StackPanel Grid.Row="3"
+							Grid.Column="0"
+							Grid.ColumnSpan="4"
+							Margin="0,4,8,0">
+						<TextBlock Text="Border color:"
+							   Margin="0,0,0,2" />
+						<ComboBox x:CompileBindings="False"
+							  HorizontalAlignment="Stretch"
+							  ItemsSource="{Binding BorderColorOptions,
+							  RelativeSource={RelativeSource AncestorType=local:MainWindow}}"
+							  DisplayMemberBinding="{Binding Label}"
+							  SelectedItem="{Binding Font.SelectedBorderColorOption, Mode=OneWay}"
+							  SelectionChanged="SubtitleBorderColorComboBox_OnSelectionChanged" />
+
+					    </StackPanel>
+
+					    <!-- Border width -->
+					    <StackPanel Grid.Row="3"
+							Grid.Column="4"
+							Grid.ColumnSpan="2"
+							Margin="0,4,0,0">
+						<TextBlock Text="Border Width"
+							   Margin="0,0,0,2" />
+						<NumericUpDown Minimum="1"
+						       Increment="1"
+						       Width="60"
+						       HorizontalAlignment="Left"
+						       Value="{Binding Font.BorderWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+
+					    <StackPanel Grid.Row="3"
+							    Grid.Column="6"
+							    Grid.ColumnSpan="4"
+							    Margin="0,4,0,0">
+						    <TextBlock Text=""
+							   Margin="0,0,0,2" />
+						    <Button x:Name="AddCustomFontButton"
+							    Content="Add Custom Font"
+							    HorizontalAlignment="Left"
+							    Click="AddCustomFontButton_OnClick" />
+					   </StackPanel>
+
+					    <!-- Row 4: Position / padding / offset -->
+					    <!-- Position (anchor) -->
+					    <StackPanel Grid.Row="4"
+							Grid.Column="0"
+							Grid.ColumnSpan="2"
+							Margin="0,4,8,0">
+						<TextBlock Text="Position"
+							   Margin="0,0,0,2" />
+						<ComboBox HorizontalAlignment="Stretch"
+							  SelectedItem="{Binding Position.Anchor}">
+						    <ComboBox.Items>
+							<x:String>Origin</x:String>
+							<x:String>Top Left</x:String>
+							<x:String>Top Middle</x:String>
+							<x:String>Top Right</x:String>
+							<x:String>Middle Left</x:String>
+							<x:String>Middle</x:String>
+							<x:String>Middle Right</x:String>
+							<x:String>Bottom Left</x:String>
+							<x:String>Bottom Middle</x:String>
+							<x:String>Bottom Right</x:String>
+						    </ComboBox.Items>
+						</ComboBox>
+					    </StackPanel>
+
+					    <!-- X padding -->
+					    <StackPanel Grid.Row="4"
+							Grid.Column="2"
+							Grid.ColumnSpan="2"
+							Margin="0,4,4,0">
+						<TextBlock Text="X padding"
+							   Margin="0,0,0,2"
+							   HorizontalAlignment="Center" />
+						<NumericUpDown Minimum="0" Maximum="100"
+						       Increment="1"
+						       Width="60"
+						       HorizontalAlignment="Center"
+						       Value="{Binding Position.XPad, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+
+					    <!-- Y padding -->
+					    <StackPanel Grid.Row="4"
+							Grid.Column="4"
+							Grid.ColumnSpan="2"
+							Margin="0,4,4,0">
+						<TextBlock Text="Y padding"
+							   Margin="0,0,0,2" 
+							   HorizontalAlignment="Center" />
+						<NumericUpDown Minimum="0" Maximum="100"
+						       Increment="1"
+						       Width="60"
+						       HorizontalAlignment="Center"
+						       Value="{Binding Position.YPad, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+					    </StackPanel>
+
+					    <!-- X offset -->
+					    <StackPanel Grid.Row="4"
+							Grid.Column="6"
+							Grid.ColumnSpan="2"
+							Margin="0,4,4,0">
+						<TextBlock Text="X offset"
+							   Margin="0,0,0,2" 
+							   HorizontalAlignment="Center" />
+						<NumericUpDown Increment="1"
+						       Width="60"
+						       HorizontalAlignment="Center"
+						       Value="{Binding Position.XOffset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>
+
+					    <!-- Y offset -->
+					    <StackPanel Grid.Row="4"
+							Grid.Column="8"
+							Grid.ColumnSpan="2"
+							Margin="0,4,0,0">
+						<TextBlock Text="Y offset"
+							   Margin="0,0,0,2"
+							   HorizontalAlignment="Center" />
+						<NumericUpDown Increment="1"
+						       Width="60"
+						       HorizontalAlignment="Center"
+						       Value="{Binding Position.YOffset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					    </StackPanel>	
+
+					    <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="10"
+							Orientation="Horizontal"
+							HorizontalAlignment="Right"
+							Margin="0,8,0,0"
+							Spacing="8">
+
+						<Button Content="Add Subtitle"
+							Click="Subtitle_AddBelow_OnClick" />
+
+						<Button Content="Remove Subtitle"
+							Click="Subtitle_Remove_OnClick" />
+
+						<Button Content="Move Up"
+							Click="Subtitle_MoveUp_OnClick"
+							IsEnabled="{Binding IsFirst, Converter={StaticResource InverseBooleanConverter}}" />
+
+						<Button Content="Move Down"
+							Click="Subtitle_MoveDown_OnClick"
+							IsEnabled="{Binding IsLast, Converter={StaticResource InverseBooleanConverter}}" />
+					    </StackPanel>
+
+					</Grid>
+				    </Border>
+				    <Separator Margin="0,8,0,8"/>
+			    </StackPanel>
+			</DataTemplate>
+		    </ItemsControl.ItemTemplate>
+		</ItemsControl>
+
+
+                <!-- Advanced settings (pseudo-expander) -->
+		<StackPanel>
+		    <ToggleButton x:Name="AdvancedToggle"
+				  Content="Advanced settings"
+				  IsChecked="False"
+				  HorizontalAlignment="Left" />
+		    <StackPanel Margin="8,4,0,0"
+				IsVisible="{Binding IsChecked, ElementName=AdvancedToggle}"
+				Spacing="8">
+
+			<!-- Tool paths -->
+                        <TextBlock Text="Tool paths" FontWeight="Bold" />
+
+                        <!-- VideoStamper.Cli path -->
+                        <StackPanel Margin="0,4,0,0"
+			    IsVisible="False"
+			    IsEnabled="False" >
+                            <TextBlock Text="VideoStamper.Cli:"
+                                       Margin="0,0,0,2" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox x:Name="CliPathTextBox"
+                                         Width="260" />
+                                <Button Content="Browse…"
+                                        Margin="4,0,0,0"
+                                        Click="BrowseCli_OnClick" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- ffmpeg path -->
+                        <StackPanel Margin="0,4,0,0">
+                            <TextBlock Text="ffmpeg path:"
+                                       Margin="0,0,0,2" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox x:Name="FfmpegPathTextBox"
+                                         Width="260"
+                                         Watermark="Using Default Path" />
+                                <Button Content="Browse…"
+                                        Margin="4,0,0,0"
+                                        Click="BrowseFfmpeg_OnClick" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- ffprobe path -->
+                        <StackPanel Margin="0,4,0,0">
+                            <TextBlock Text="ffprobe path:"
+                                       Margin="0,8,0,4" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox x:Name="FfprobePathTextBox"
+                                         Width="260"
+                                         Watermark="Using Default Path" />
+                                <Button Content="Browse…"
+                                        Margin="4,0,0,0"
+                                        Click="BrowseFfprobe_OnClick" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Debug level / View output -->
+                        <TextBlock Text="View output" Margin="0,8,0,4"/>
+                        <ComboBox x:Name="DebugLevelComboBox"
+                                  SelectedIndex="0"
+                                  Width="150">
+                            <ComboBox.Items>
+                                <x:String>No</x:String>
+                                <x:String>Info</x:String>
+                                <x:String>Verbose</x:String>
+                                <x:String>Debug</x:String>
+                            </ComboBox.Items>
+                        </ComboBox>
+
+                        <!-- CLI output -->
+                        <TextBlock Text="CLI output:" Margin="0,8,0,0" />
+                        <TextBox x:Name="OutputTextBox"
+                                 AcceptsReturn="True"
+                                 IsReadOnly="True"
+                                 Height="150"
+                                 TextWrapping="Wrap" />
+		    </StackPanel>
+		</StackPanel>
+
+                <Separator Margin="0,8,0,8"/>
+
+                <!-- Import / Export / Run -->
+		<StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+		    <Button Content="Import Project"
+			    Click="ImportProject_OnClick" />
+		    <Button Content="Export Project"
+			    Click="ExportProject_OnClick" />
+		    <Button Content="Run VideoStamper"
+			    Click="Run_OnClick" />
+		</StackPanel>
+
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
+

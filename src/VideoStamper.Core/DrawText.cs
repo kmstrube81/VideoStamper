@@ -72,6 +72,11 @@ public sealed class DrawText {
         if (!string.IsNullOrEmpty(Between))
         {
             sb.Append($":enable='{Between})'");
+        } else {
+            if(Start != null && End != null && Start >= 0.0 && End > Start) {
+                Between = $"between(t,{Start},{End})";
+                sb.Append($":enable='{Between}'");
+            }
         }
 
         return sb.ToString();

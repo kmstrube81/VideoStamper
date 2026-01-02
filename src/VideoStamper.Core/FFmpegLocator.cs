@@ -8,7 +8,29 @@ public static class FfmpegLocator
     public static string GetFfmpegPath() => GetToolPath("ffmpeg");
     public static string GetFfprobePath() => GetToolPath("ffprobe");
 
-    private static string GetToolPath(string toolName)
+    public static string? CustomFfmpegPath { get; set; }
+    public static string? CustomFfprobePath { get; set; }
+
+    public static string GetToolPath(string toolName)
+    {
+        switch(toolName) {
+            case "ffmpeg":
+                if (!string.IsNullOrWhiteSpace(CustomFfmpegPath))
+                {
+                    return CustomFfmpegPath!;
+                }
+                return GetDefaultToolPath("ffmpeg");
+            case "ffprobe":
+                if (!string.IsNullOrWhiteSpace(CustomFfprobePath))
+                {
+                    return CustomFfprobePath!;
+                }
+                return GetDefaultToolPath("ffprobe");
+        }
+        return GetDefaultToolPath(toolName);
+    }
+
+    private static string GetDefaultToolPath(string toolName)
     {
         string platformSubdir;
         string exe;

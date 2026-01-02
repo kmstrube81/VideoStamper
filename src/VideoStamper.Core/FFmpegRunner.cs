@@ -75,40 +75,94 @@ public static class FfmpegRunner
         foreach (var arg in arguments)
             psi.ArgumentList.Add(arg);
 
-        // Debug-only command echo
+        // Always build a printable command string (useful for exception detail)
+        string cmd = FormatCommand(ffmpeg, psi.ArgumentList);
+
+        // Debug-only command echo (console), but ALSO nice to show in GUI log
         if (Globals.DEBUG > 2)
         {
-            string cmd = FormatCommand(ffmpeg, psi.ArgumentList);
             Console.WriteLine($"{Globals.DEBUG_LEVEL}: FFmpeg command:\n{cmd}\n");
+            log?.Report($"{Globals.DEBUG_LEVEL}: FFmpeg command:");
+            log?.Report(cmd);
+            log?.Report("");
         }
 
         using var proc = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start ffmpeg");
 
-        if (Globals.DEBUG > 2)
+        // Tail buffers so we can throw a helpful exception
+        var stdoutTail = new RingBuffer(200);
+        var stderrTail = new RingBuffer(200);
+
+        // Ensure cancellation stops ffmpeg
+        using var reg = cancellationToken.Register(() =>
         {
-            // Normal debug mode: report stderr to progress logger
-            while (!proc.HasExited)
+            try
+            {
+                if (!proc.HasExited)
+                    proc.Kill(entireProcessTree: true);
+            }
+            catch { /* ignore */ }
+        });
+
+        // Read stdout/stderr concurrently so neither pipe blocks ffmpeg
+        var stdoutTask = Task.Run(async () =>
+        {
+            while (!proc.StandardOutput.EndOfStream && !cancellationToken.IsCancellationRequested)
+            {
+                var line = await proc.StandardOutput.ReadLineAsync();
+                if (line == null) break;
+
+                stdoutTail.Add(line);
+
+                // In debug, you may want stdout too, but usually stderr is enough.
+                // If you want stdout logged live, uncomment:
+                // if (Globals.DEBUG > 2) log?.Report(line);
+            }
+        }, cancellationToken);
+
+        var stderrTask = Task.Run(async () =>
+        {
+            while (!proc.StandardError.EndOfStream && !cancellationToken.IsCancellationRequested)
             {
                 var line = await proc.StandardError.ReadLineAsync();
                 if (line == null) break;
-                log?.Report(line);
+
+                stderrTail.Add(line);
+
+                // In debug, stream stderr live (this is where ffmpeg progress/errors go)
+                if (Globals.DEBUG > 2)
+                    log?.Report(line);
             }
-        }
-        else
-        {
-            // Silent mode: fully discard stderr so ffmpeg does not block
-            _ = Task.Run(() => DiscardStreamAsync(proc.StandardError, cancellationToken));
-            _ = Task.Run(() => DiscardStreamAsync(proc.StandardOutput, cancellationToken));
-        }
+        }, cancellationToken);
 
         await proc.WaitForExitAsync(cancellationToken);
 
+        // Ensure both reader tasks complete (drain remaining output)
+        try
+        {
+            await Task.WhenAll(stdoutTask, stderrTask);
+        }
+        catch (OperationCanceledException)
+        {
+            // If canceled, let the OCE bubble up or you can wrap it.
+            throw;
+        }
+
         if (proc.ExitCode != 0)
         {
-            throw new Exception($"ffmpeg failed with exit code {proc.ExitCode}");
+            var stderrText = stderrTail.ToString();
+            var stdoutText = stdoutTail.ToString();
+
+            throw new Exception(
+                $"ffmpeg failed with exit code {proc.ExitCode}\n\n" +
+                $"Command:\n{cmd}\n\n" +
+                $"--- stderr (tail) ---\n{stderrText}\n\n" +
+                $"--- stdout (tail) ---\n{stdoutText}\n"
+            );
         }
     }
+
 
     private static async Task<string> DiscardStreamAsync(
         StreamReader reader,
@@ -143,5 +197,28 @@ public static class FfmpegRunner
 
         return sb.ToString();
     }
+
+    private sealed class RingBuffer
+    {
+        private readonly int _capacity;
+        private readonly Queue<string> _q;
+
+        public RingBuffer(int capacity)
+        {
+            _capacity = Math.Max(1, capacity);
+            _q = new Queue<string>(_capacity);
+        }
+
+        public void Add(string line)
+        {
+            if (_q.Count >= _capacity)
+                _q.Dequeue();
+            _q.Enqueue(line);
+        }
+
+        public override string ToString()
+            => string.Join(Environment.NewLine, _q);
+    }
+
 }
 

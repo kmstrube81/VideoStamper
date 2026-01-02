@@ -17,13 +17,45 @@ public static class ProjectProcessor
     public static async Task<ProcessResult> ProcessProjectAsync(
         string projectJson,
         string? projectFilePath = null,
-        CancellationToken cancellationToken = default
+        CancellationToken cancellationToken = default,
+        IProgress<string>? progressSink = null,
+        string? debugLevel = "None"
     )
     {
-        if (Globals.DEBUG > 1)
-        {
-            Console.WriteLine($"{Globals.DEBUG_LEVEL}: Reading project settings JSON");
+
+       switch (debugLevel) {
+            case "-i":
+            case "--info":
+            case "info":
+            case "Info":
+                Globals.DEBUG = 1;
+                Globals.DEBUG_LEVEL = "INFO";
+                break;
+            case "-v":
+            case "--verbose":
+            case "verbose":
+            case "Verbose":
+                Globals.DEBUG = 2;
+                Globals.DEBUG_LEVEL = "VERBOSE";
+                break;
+            case "-d":
+            case "--debug":
+            case "debug":
+            case "Debug":
+                Globals.DEBUG = 3;
+                Globals.DEBUG_LEVEL = "DEBUG";
+                break;
+            default:
+                Globals.DEBUG = 0;
+                Globals.DEBUG_LEVEL = "none";
+                break;
         }
+
+        // Helper to emit messages to whoever is listening (CLI/GUI)
+        void Report(string msg) => progressSink?.Report(msg);
+
+        if (Globals.DEBUG > 1)
+            Report($"{Globals.DEBUG_LEVEL}: Reading project settings JSON");
 
         // Get Settings
         ProjectSettings settings;
@@ -36,38 +68,41 @@ public static class ProjectProcessor
 
             if (Globals.DEBUG > 1)
             {
-                var debugJson = JsonSerializer.Serialize(
-                    settings,
-                    new JsonSerializerOptions { WriteIndented = true }
-                );
-                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Parsed ProjectSettings:\n{debugJson}");
+                var debugJson = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+                Report($"{Globals.DEBUG_LEVEL}: Parsed ProjectSettings:\n{debugJson}");
             }
         }
         catch (Exception ex)
         {
-            return new ProcessResult
+            return new ProcessResult { Success = false, Message = $"Failed to parse project JSON: {ex.Message}" };
+        }
+
+        // Use optional ffmpeg/ffprobe overrides from project JSON
+        if (settings.Tools is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.Tools.FfmpegPath))
             {
-                Success = false,
-                Message = $"Failed to parse project JSON: {ex.Message}"
-            };
+                FfmpegLocator.CustomFfmpegPath = settings.Tools.FfmpegPath;
+                if (Globals.DEBUG > 0)
+                    Report($"{Globals.DEBUG_LEVEL}: Using custom ffmpeg path: {settings.Tools.FfmpegPath}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(settings.Tools.FfprobePath))
+            {
+                FfmpegLocator.CustomFfprobePath = settings.Tools.FfprobePath;
+                if (Globals.DEBUG > 0)
+                    Report($"{Globals.DEBUG_LEVEL}: Using custom ffprobe path: {settings.Tools.FfprobePath}");
+            }
         }
 
         if (settings.Inputs.Count == 0)
-        {
-            return new ProcessResult
-            {
-                Success = false,
-                Message = "No inputs defined in project JSON."
-            };
-        }
+            return new ProcessResult { Success = false, Message = "No inputs defined in project JSON." };
 
         if (Globals.DEBUG > 0)
-        {
-            Console.WriteLine($"{Globals.DEBUG_LEVEL}: {settings.Inputs.Count} videos to process");
-        }
+            Report($"{Globals.DEBUG_LEVEL}: {settings.Inputs.Count} videos to process");
 
         // Progress sink for ffmpeg
-        var progress = new Progress<string>(s => Console.WriteLine($"[ffmpeg] {s}"));
+        var ffmpegProgress = new Progress<string>(s => Report($"[ffmpeg] {s}"));
 
         // Temp directory for all intermediate work
         var tempRoot = Path.Combine(Path.GetTempPath(), "VideoStamper");
@@ -75,11 +110,11 @@ public static class ProjectProcessor
         var tempDir = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
-        // We will always stamp to temp MP4 clips first (like the PowerShell does),
+        // We will always stamp to temp MP4 clips first 
         // then optionally concat and/or re-encode to webm/gif.
         var stampedFiles = new List<(string InputPath, string TempStampedPath)>();
-
-        // 1) STAMP EACH INPUT → temp .mp4
+        var index = 0;
+        // 1) STAMP EACH INPUT to temp .mp4
         foreach (var input in settings.Inputs)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -89,14 +124,16 @@ public static class ProjectProcessor
                 throw new FileNotFoundException($"Input file not found: {input.Path}");
             }
 
+            Report($"Stamping {index+1}/{settings.Inputs.Count}: {Path.GetFileName(input.Path)}");
+
             if (Globals.DEBUG > 1)
             {
-                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Processing {input.Path}");
+                Report($"{Globals.DEBUG_LEVEL}: Processing {input.Path}");
             }
 
             if (Globals.DEBUG > 0)
             {
-                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Reading metadata");
+                Report($"{Globals.DEBUG_LEVEL}: Reading metadata");
             }
 
             var meta = await VideoMetadataReader.GetMetadataAsync(input.Path, cancellationToken);
@@ -107,19 +144,19 @@ public static class ProjectProcessor
                     meta,
                     new JsonSerializerOptions { WriteIndented = true }
                 );
-                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Parsed metadata:\n{debugJson}");
+                Report($"{Globals.DEBUG_LEVEL}: Parsed metadata:\n{debugJson}");
             }
 
             if (Globals.DEBUG > 0)
             {
-                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Generating FFmpeg filter");
+                Report($"{Globals.DEBUG_LEVEL}: Generating FFmpeg filter");
             }
 
             var filter = FilterBuilder.BuildFilterComplexForInput(input, meta);
 
             if (Globals.DEBUG > 1)
             {
-                Console.WriteLine($"{Globals.DEBUG_LEVEL}: FFmpeg filter = {filter}");
+                Report($"{Globals.DEBUG_LEVEL}: FFmpeg filter = {filter}");
             }
 
             // Intermediate stamped clip path (ALWAYS mp4)
@@ -133,17 +170,19 @@ public static class ProjectProcessor
                 "-vf", filter,
                 "-map_metadata", "0",
                 "-movflags", "use_metadata_tags",
+                "-movflags", "use_metadata_tags+faststart",
                 tempStampedPath
             };
 
-            await FfmpegRunner.RunFfmpegAsync(stampArgs, progress, cancellationToken);
+            await FfmpegRunner.RunFfmpegAsync(stampArgs, ffmpegProgress, cancellationToken);
 
             if (Globals.DEBUG > 0)
             {
-                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Finished stamping {input.Path} → {tempStampedPath}");
+                Report($"{Globals.DEBUG_LEVEL}: Finished stamping {input.Path} to {tempStampedPath}");
             }
 
             stampedFiles.Add((input.Path, tempStampedPath));
+            index++;
         }
 
         // 2) FINAL OUTPUT LOGIC: concat vs per-clip, and mp4/webm/gif conversions
@@ -175,6 +214,8 @@ public static class ProjectProcessor
                 };
             }
 
+            Report("Concatenating clips...");
+
             // Determine final output directory & name from the project JSON path
             string finalDir;
             string finalBaseName;
@@ -195,7 +236,7 @@ public static class ProjectProcessor
 
             if (Globals.DEBUG > 0)
             {
-                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Concatenate mode, final output will be {finalOut}");
+                Report($"{Globals.DEBUG_LEVEL}: Concatenate mode, final output will be {finalOut}");
             }
 
             // If only one stamped clip, we can treat it as the "concat" result
@@ -211,7 +252,7 @@ public static class ProjectProcessor
                 var lines = stampedFiles.Select(s => $"file '{s.TempStampedPath}'");
                 await File.WriteAllLinesAsync(listFile, lines, cancellationToken);
 
-                tempConcatMp4 = Path.Combine(tempDir, "concat_temp.mp4");
+               tempConcatMp4 = Path.Combine(tempDir, "concat_temp.mp4");
 
                 var concatArgs = new List<string>
                 {
@@ -220,15 +261,22 @@ public static class ProjectProcessor
                     "-f", "concat",
                     "-safe", "0",
                     "-i", listFile,
-                    "-c", "copy",
+                    // Re-encode so differing resolutions/params are OK
+                    "-c:v", "libx264",
+                    "-c:a", "aac",
+                    // Keep metadata from the concat input (which comes from the first segment)
+                    "-map_metadata", "0",
+                    // Nice to have: faststart + tag-friendly metadata
+                    "-movflags", "use_metadata_tags+faststart",
                     "-y", tempConcatMp4
                 };
 
-                await FfmpegRunner.RunFfmpegAsync(concatArgs, progress, cancellationToken);
+                await FfmpegRunner.RunFfmpegAsync(concatArgs, ffmpegProgress, cancellationToken);
+
 
                 if (Globals.DEBUG > 0)
                 {
-                    Console.WriteLine($"{Globals.DEBUG_LEVEL}: Finished concat → {tempConcatMp4}");
+                    Report($"{Globals.DEBUG_LEVEL}: Finished concat → {tempConcatMp4}");
                 }
             }
 
@@ -238,6 +286,7 @@ public static class ProjectProcessor
                 case "mp4":
                     {
                         Directory.CreateDirectory(finalDir);
+                        Report("Encoding final output...");
                         if (!string.Equals(tempConcatMp4, finalOut, StringComparison.OrdinalIgnoreCase))
                         {
                             if (File.Exists(finalOut)) File.Delete(finalOut);
@@ -246,13 +295,14 @@ public static class ProjectProcessor
 
                         if (Globals.DEBUG > 0)
                         {
-                            Console.WriteLine($"{Globals.DEBUG_LEVEL}: Finished - stamped mp4 saved to: {finalOut}");
+                            Report($"{Globals.DEBUG_LEVEL}: Finished - stamped mp4 saved to: {finalOut}");
                         }
                         break;
                     }
 
                 case "webm":
                     {
+                        Report("Encoding final output...");
                         var args = new List<string>
                         {
                             "-y",
@@ -266,17 +316,18 @@ public static class ProjectProcessor
                             "-map_metadata", "0",
                             finalOut
                         };
-                        await FfmpegRunner.RunFfmpegAsync(args, progress, cancellationToken);
+                        await FfmpegRunner.RunFfmpegAsync(args, ffmpegProgress, cancellationToken);
 
                         if (Globals.DEBUG > 0)
                         {
-                            Console.WriteLine($"{Globals.DEBUG_LEVEL}: Finished - stamped webm video saved to: {finalOut}");
+                            Report($"{Globals.DEBUG_LEVEL}: Finished - stamped webm video saved to: {finalOut}");
                         }
                         break;
                     }
 
                 case "gif":
                     {
+                        Report("Encoding final output...");
                         var args = new List<string>
                         {
                             "-y",
@@ -285,11 +336,11 @@ public static class ProjectProcessor
                             "-loop", "0",
                             finalOut
                         };
-                        await FfmpegRunner.RunFfmpegAsync(args, progress, cancellationToken);
+                        await FfmpegRunner.RunFfmpegAsync(args, ffmpegProgress, cancellationToken);
 
                         if (Globals.DEBUG > 0)
                         {
-                            Console.WriteLine($"{Globals.DEBUG_LEVEL}: Finished - stamped gif saved to: {finalOut}");
+                            Report($"{Globals.DEBUG_LEVEL}: Finished - stamped gif saved to: {finalOut}");
                         }
                         break;
                     }
@@ -327,13 +378,14 @@ public static class ProjectProcessor
 
                             if (Globals.DEBUG > 0)
                             {
-                                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Finished - stamped mp4 saved to: {finalOut}");
+                                Report($"{Globals.DEBUG_LEVEL}: Finished - stamped mp4 saved to: {finalOut}");
                             }
                             break;
                         }
 
                     case "webm":
                         {
+                            Report("Encoding final output...");
                             var args = new List<string>
                             {
                                 "-y",
@@ -347,17 +399,18 @@ public static class ProjectProcessor
                                 "-map_metadata", "0",
                                 finalOut
                             };
-                            await FfmpegRunner.RunFfmpegAsync(args, progress, cancellationToken);
+                            await FfmpegRunner.RunFfmpegAsync(args, ffmpegProgress, cancellationToken);
 
                             if (Globals.DEBUG > 0)
                             {
-                                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Finished - stamped webm video saved to: {finalOut}");
+                                Report($"{Globals.DEBUG_LEVEL}: Finished - stamped webm video saved to: {finalOut}");
                             }
                             break;
                         }
 
                     case "gif":
                         {
+                            Report("Encoding final output...");
                             var args = new List<string>
                             {
                                 "-y",
@@ -366,11 +419,11 @@ public static class ProjectProcessor
                                 "-loop", "0",
                                 finalOut
                             };
-                            await FfmpegRunner.RunFfmpegAsync(args, progress, cancellationToken);
+                            await FfmpegRunner.RunFfmpegAsync(args, ffmpegProgress, cancellationToken);
 
                             if (Globals.DEBUG > 0)
                             {
-                                Console.WriteLine($"{Globals.DEBUG_LEVEL}: Finished - stamped gif saved to: {finalOut}");
+                                Report($"{Globals.DEBUG_LEVEL}: Finished - stamped gif saved to: {finalOut}");
                             }
                             break;
                         }
