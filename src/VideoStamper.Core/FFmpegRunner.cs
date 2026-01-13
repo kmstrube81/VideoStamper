@@ -108,33 +108,29 @@ public static class FfmpegRunner
         // Read stdout/stderr concurrently so neither pipe blocks ffmpeg
         var stdoutTask = Task.Run(async () =>
         {
-            while (!proc.StandardOutput.EndOfStream && !cancellationToken.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 var line = await proc.StandardOutput.ReadLineAsync();
-                if (line == null) break;
+                if (line is null) break;
 
                 stdoutTail.Add(line);
-
-                // In debug, you may want stdout too, but usually stderr is enough.
-                // If you want stdout logged live, uncomment:
-                // if (Globals.DEBUG > 2) log?.Report(line);
             }
         }, cancellationToken);
 
         var stderrTask = Task.Run(async () =>
         {
-            while (!proc.StandardError.EndOfStream && !cancellationToken.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 var line = await proc.StandardError.ReadLineAsync();
-                if (line == null) break;
+                if (line is null) break;
 
                 stderrTail.Add(line);
 
-                // In debug, stream stderr live (this is where ffmpeg progress/errors go)
                 if (Globals.DEBUG > 2)
                     log?.Report(line);
             }
         }, cancellationToken);
+
 
         await proc.WaitForExitAsync(cancellationToken);
 

@@ -35,10 +35,10 @@
 		    </ListBox>
 
 		    <StackPanel Orientation="Horizontal" Spacing="4">
-			<Button Content="Add" Click="AddInput_OnClick" Width="60"/>
-			<Button Content="Remove" Click="RemoveInput_OnClick" Width="80"/>
-			<Button Content="Up" Click="MoveInputUp_OnClick" Width="40"/>
-			<Button Content="Down" Click="MoveInputDown_OnClick" Width="60"/>
+			<Button x:Name="AddInputButton" Content="Add" Click="AddInput_OnClick" Width="60"/>
+			<Button x:Name="RemoveInputButton" Content="Remove" Click="RemoveInput_OnClick" Width="80"/>
+			<Button x:Name="MoveInputUpButton" Content="Up" Click="MoveInputUp_OnClick" Width="40"/>
+			<Button x:Name="MoveInputDownButton" Content="Down" Click="MoveInputDown_OnClick" Width="60"/>
 		    </StackPanel>
 		</StackPanel>
 	</Border>
@@ -429,12 +429,13 @@
 					    BorderThickness="1"
 					    CornerRadius="4">
 					<Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
-					      ColumnDefinitions="*,*,*,*,*,*,*,*,*,*">
+					      ColumnDefinitions="*,*,*,*,*,*,*,*,*,*"
+					      ColumnSpacing="8"
+					      RowSpacing="4">
 					     <!-- Row 0: subtitle text / start / duration -->
 					    <StackPanel Grid.Row="0"
 							Grid.Column="0"
-							Grid.ColumnSpan="6"
-							Margin="0,4,8,0">
+							Grid.ColumnSpan="6">
 						<TextBlock Text="Subtitle Text"
 							   Margin="0,0,0,2" />
 						<TextBox   AcceptsReturn="True"
@@ -443,8 +444,7 @@
 					    </StackPanel>
 					    <StackPanel Grid.Row="0"
 							Grid.Column="6"
-							Grid.ColumnSpan="2"
-							Margin="0,4,8,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="Start Time (s)"
 							   Margin="0,0,0,2" />
 						<NumericUpDown Minimum="0"
@@ -453,8 +453,7 @@
 					    </StackPanel>
 					    <StackPanel Grid.Row="0"
 							Grid.Column="8"
-							Grid.ColumnSpan="2"
-							Margin="0,4,8,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="Duration (s)"
 							   Margin="0,0,0,2" />
 						<NumericUpDown Minimum="0"
@@ -464,12 +463,11 @@
 					    <!-- Row 1: Animations -->
 					    <StackPanel Grid.Row="1"
 							Grid.Column="0"
-							Grid.ColumnSpan="3"
+							Grid.ColumnSpan="4"
 							Margin="0,4,8,0">
 						<TextBlock Text="In Animation"
 							   Margin="0,0,0,2" />
-						<ComboBox SelectedItem="{Binding InAnimation, Mode=TwoWay}"
-							IsEnabled="False">
+						<ComboBox HorizontalAlignment="Stretch" SelectedItem="{Binding SelectedAnimationInOption, Mode=TwoWay}" >
 							<x:String>None</x:String>
 							<x:String>Fade In</x:String>
 							<x:String>Fly In from Top Left</x:String>
@@ -480,56 +478,62 @@
 							<x:String>Fly In from Bottom Left</x:String>
 							<x:String>Fly In from Bottom</x:String>
 							<x:String>Fly In from Bottom Right</x:String>
+							<x:String>Slide In from Top</x:String>
+							<x:String>Slide In from Left</x:String>
+							<x:String>Slide In from Right</x:String>
+							<x:String>Slide In from Bottom</x:String>
 						</ComboBox>
 					    </StackPanel>
 					    <StackPanel Grid.Row="1"
-							Grid.Column="3"
-							Grid.ColumnSpan="2"
+							Grid.Column="4"
+							Grid.ColumnSpan="1"
 							Margin="0,4,8,0">
-						<TextBlock Text="Duration (s)"
+						<TextBlock Text="Dur(s)"
 							   Margin="0,0,0,2" />
-						<NumericUpDown  IsEnabled="False"
+						<NumericUpDown	Width="60"
 								Minimum="0"
 								Increment="1"
-								Value="{Binding InAnimationDuration, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+								Value="{Binding AnimationInDur, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 					    </StackPanel>
 					    <StackPanel Grid.Row="1"
 							Grid.Column="5"
-							Grid.ColumnSpan="3"
+							Grid.ColumnSpan="4"
 							Margin="0,4,8,0">
 						<TextBlock Text="Out Animation"
 							   Margin="0,0,0,2" />
-						<ComboBox SelectedItem="{Binding OutAnimation, Mode=TwoWay}"
-							IsEnabled="False">
+						<ComboBox HorizontalAlignment="Stretch" SelectedItem="{Binding SelectedAnimationOutOption, Mode=TwoWay}" >
 							<x:String>None</x:String>
 							<x:String>Fade Out</x:String>
-							<x:String>Fly Out from Top Left</x:String>
-							<x:String>Fly Out from Top</x:String>
-							<x:String>Fly Out from Top Right</x:String>
-							<x:String>Fly Out from Left</x:String>
-							<x:String>Fly Out from Right</x:String>
-							<x:String>Fly Out from Bottom Left</x:String>
-							<x:String>Fly Out from Bottom</x:String>
-							<x:String>Fly Out from Bottom Right</x:String>
+							<x:String>Fly Out to Top Left</x:String>
+							<x:String>Fly Out to Top</x:String>
+							<x:String>Fly Out to Top Right</x:String>
+							<x:String>Fly Out to Left</x:String>
+							<x:String>Fly Out to Right</x:String>
+							<x:String>Fly Out to Bottom Left</x:String>
+							<x:String>Fly Out to Bottom</x:String>
+							<x:String>Fly Out to Bottom Right</x:String>
+							<x:String>Slide Out to Top</x:String>
+							<x:String>Slide Out to Left</x:String>
+							<x:String>Slide Out to Right</x:String>
+							<x:String>Slide Out to Bottom</x:String>
 						</ComboBox>
 					    </StackPanel>
 					    <StackPanel Grid.Row="1"
-							Grid.Column="8"
-							Grid.ColumnSpan="2"
+							Grid.Column="9"
+							Grid.ColumnSpan="1"
 							Margin="0,4,8,0">
-						<TextBlock Text="Duration (s)"
+						<TextBlock Text="Dur(s)"
 							   Margin="0,0,0,2" />
-						<NumericUpDown  IsEnabled="False"
+						<NumericUpDown  Width="60"
 								Minimum="0"
 								Increment="1"
-								Value="{Binding OutAnimationDuration, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" />
+								Value="{Binding AnimationOutDur, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 					    </StackPanel>
 					    <!-- Row 2: Font + size + colors -->
 					    <!-- Font (spans 2 columns) -->
 					    <StackPanel Grid.Row="2"
 							Grid.Column="0"
-							Grid.ColumnSpan="4"
-							Margin="0,4,8,0">
+							Grid.ColumnSpan="4">
 						<TextBlock Text="Font"
 							   Margin="0,0,0,2" />
 						<ComboBox x:CompileBindings="False"
@@ -546,8 +550,7 @@
 					    <!-- Font color -->
 					    <StackPanel Grid.Row="2"
 							Grid.Column="4"
-							Grid.ColumnSpan="4"
-							Margin="0,4,8,0">
+							Grid.ColumnSpan="4">
 						<TextBlock Text="Font color:"
 							   Margin="0,0,0,2" />
 						<ComboBox HorizontalAlignment="Stretch"
@@ -571,8 +574,7 @@
 					    <!-- Font size -->
 					    <StackPanel Grid.Row="2"
 							Grid.Column="8"
-							Grid.ColumnSpan="2"
-							Margin="0,4,8,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="Size"
 							   Margin="0,0,0,2" />
 						<NumericUpDown Minimum="1"
@@ -585,8 +587,7 @@
 					    <!-- Border color -->
 					    <StackPanel Grid.Row="3"
 							Grid.Column="0"
-							Grid.ColumnSpan="4"
-							Margin="0,4,8,0">
+							Grid.ColumnSpan="4">
 						<TextBlock Text="Border color:"
 							   Margin="0,0,0,2" />
 						<ComboBox x:CompileBindings="False"
@@ -602,8 +603,7 @@
 					    <!-- Border width -->
 					    <StackPanel Grid.Row="3"
 							Grid.Column="4"
-							Grid.ColumnSpan="2"
-							Margin="0,4,0,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="Border Width"
 							   Margin="0,0,0,2" />
 						<NumericUpDown Minimum="1"
@@ -615,8 +615,7 @@
 
 					    <StackPanel Grid.Row="3"
 							    Grid.Column="6"
-							    Grid.ColumnSpan="4"
-							    Margin="0,4,0,0">
+							    Grid.ColumnSpan="4">
 						    <TextBlock Text=""
 							   Margin="0,0,0,2" />
 						    <Button x:Name="AddCustomFontButton"
@@ -629,8 +628,7 @@
 					    <!-- Position (anchor) -->
 					    <StackPanel Grid.Row="4"
 							Grid.Column="0"
-							Grid.ColumnSpan="2"
-							Margin="0,4,8,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="Position"
 							   Margin="0,0,0,2" />
 						<ComboBox HorizontalAlignment="Stretch"
@@ -653,8 +651,7 @@
 					    <!-- X padding -->
 					    <StackPanel Grid.Row="4"
 							Grid.Column="2"
-							Grid.ColumnSpan="2"
-							Margin="0,4,4,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="X padding"
 							   Margin="0,0,0,2"
 							   HorizontalAlignment="Center" />
@@ -668,8 +665,7 @@
 					    <!-- Y padding -->
 					    <StackPanel Grid.Row="4"
 							Grid.Column="4"
-							Grid.ColumnSpan="2"
-							Margin="0,4,4,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="Y padding"
 							   Margin="0,0,0,2" 
 							   HorizontalAlignment="Center" />
@@ -684,8 +680,7 @@
 					    <!-- X offset -->
 					    <StackPanel Grid.Row="4"
 							Grid.Column="6"
-							Grid.ColumnSpan="2"
-							Margin="0,4,4,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="X offset"
 							   Margin="0,0,0,2" 
 							   HorizontalAlignment="Center" />
@@ -698,8 +693,7 @@
 					    <!-- Y offset -->
 					    <StackPanel Grid.Row="4"
 							Grid.Column="8"
-							Grid.ColumnSpan="2"
-							Margin="0,4,0,0">
+							Grid.ColumnSpan="2">
 						<TextBlock Text="Y offset"
 							   Margin="0,0,0,2"
 							   HorizontalAlignment="Center" />
@@ -712,7 +706,6 @@
 					    <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="10"
 							Orientation="Horizontal"
 							HorizontalAlignment="Right"
-							Margin="0,8,0,0"
 							Spacing="8">
 
 						<Button Content="Add Subtitle"
@@ -822,11 +815,14 @@
 
                 <!-- Import / Export / Run -->
 		<StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
-		    <Button Content="Import Project"
-			    Click="ImportProject_OnClick" />
-		    <Button Content="Export Project"
-			    Click="ExportProject_OnClick" />
-		    <Button Content="Run VideoStamper"
+		    <Button x:Name="ImportProjectButton"
+				Content="Import Project"
+				Click="ImportProject_OnClick" />
+		   <Button x:Name="ExportProjectButton"
+				Content="Export Project"
+				Click="ExportProject_OnClick" />
+		    <Button x:Name="RunButton"
+			    Content="Run VideoStamper"
 			    Click="Run_OnClick" />
 		</StackPanel>
 

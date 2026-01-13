@@ -99,12 +99,10 @@ public sealed class SubtitleSettings
     public double End { get; set; }
     public FontSettings Font { get; set; } = new();
     public PositionSettings Position { get; set; } = new();
-    /* TODO: Implement, fade in, slide in logic for ffmpeg
     public string? AnimationIn { get; set; }
     public string? AnimationOut { get; set; }
     public double? AnimationInDur { get; set; } = 1.0;
     public double? AnimationOutDur {get; set; } = 1.0;
-    */
 }
 
 /* ****************************************************************************************************

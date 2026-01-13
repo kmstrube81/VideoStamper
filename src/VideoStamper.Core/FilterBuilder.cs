@@ -263,18 +263,40 @@ public static class FilterBuilder
             var (xExpr, yExpr) = AnchorToExpressions(pos.Anchor, meta.Width, meta.Height, sub.Font.Size, pos.XOffset, pos.YOffset, pos.XPad, pos.YPad);
             var (xCoord, yCoord) = AnchorToEvaluated(pos.Anchor, meta.Width, sub.Font.Size * 0.5 * newtext.Length, meta.Height, sub.Font.Size, pos.XOffset, pos.YOffset, pos.XPad, pos.YPad);
 
-            DrawText filter = new DrawText(newtext, sub.Font.FontFile, sub.Font.Size, sub.Font.Color, xExpr, yExpr);
+            string? bc = null;
+            int? bw = 0;
 
             if (!string.IsNullOrEmpty(sub.Font.BorderColor) && sub.Font.BorderWidth.HasValue)
             {
-                filter.BorderColor = sub.Font.BorderColor;
-                filter.BorderWidth = sub.Font.BorderWidth;
+                bc = sub.Font.BorderColor;
+                bw = sub.Font.BorderWidth;
             }
 
-            filter.XCoord = (int)xCoord;
-            filter.YCoord = (int)yCoord;
-            filter.Start = sub.Start;
-            filter.End = sub.End;
+            var xc = (int)xCoord;
+            var yc = (int)yCoord;
+            double? start = sub.Start;
+            double? end = sub.End;
+            string? ia = null;
+            double? iad = 0;
+            string? oa = null;
+            double? oad = 0;
+
+            if (!string.IsNullOrEmpty(sub.AnimationIn) && sub.AnimationInDur.HasValue)
+            {
+                ia = sub.AnimationIn;
+                iad = sub.AnimationInDur;
+            }
+
+            if (!string.IsNullOrEmpty(sub.AnimationOut) && sub.AnimationOutDur.HasValue)
+            {
+                oa = sub.AnimationOut;
+                oad = sub.AnimationOutDur;
+            }
+
+            DrawText filter = new DrawText(newtext, sub.Font.FontFile, sub.Font.Size, sub.Font.Color, xExpr, yExpr, bc, bw, start, end, ia, iad, oa, oad);
+            filter.XCoord = xc;
+            filter.YCoord = yc;
+
             filter.AddToList(drawTexts, pos.Anchor);
         }
         return drawTexts;

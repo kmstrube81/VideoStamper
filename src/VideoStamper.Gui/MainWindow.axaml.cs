@@ -18,11 +18,22 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Media; 
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using VideoStamper.Gui.Models;
 using System.Threading;
 using Avalonia.Layout;
+using System.Net.Http;
 
 namespace VideoStamper.Gui;
+
+internal static class ControlExtensions
+{
+    public static T WithGridRow<T>(this T control, int row) where T : Control
+    {
+        Grid.SetRow(control, row);
+        return control;
+    }
+}
 
 public partial class MainWindow : Window
 {
@@ -35,6 +46,9 @@ public partial class MainWindow : Window
             PropertyNameCaseInsensitive = true
         };
 
+
+    private string FfmpegZipUrl  = getPlatformAutoInstallURL("ffmpeg");
+    private string FfprobeZipUrl = getPlatformAutoInstallURL("ffprobe");
 
     private readonly ObservableCollection<InputSettings> _inputs = new();
     private int _currentInputIndex = -1;
@@ -130,6 +144,8 @@ public partial class MainWindow : Window
         InitializeAdvancedSettingsFromSettings(); 
 
         this.Opened += MainWindow_Opened;
+
+        SetProcessingUiState(false);
 
         // Graceful quit prompt
         this.Closing += MainWindow_Closing;
@@ -370,10 +386,10 @@ public partial class MainWindow : Window
             Start = 0,
             Duration = 2,
 
-            InAnimation = "None",
-            InAnimationDuration = 0.5,
-            OutAnimation = "None",
-            OutAnimationDuration = 0.5,
+            AnimationIn = null,
+            AnimationInDur = 0.5,
+            AnimationOut = null,
+            AnimationOutDur = 0.5,
 
             Font = new FontSettings
             {
@@ -791,13 +807,57 @@ private FontOption? FindFontByName(string name) =>
                     };
             }
 
-            // Tool overrides into advanced settings (and persist next launch, per your existing behavior)
-            FfmpegPathTextBox.Text = project.Tools?.FfmpegPath ?? "";
-            FfprobePathTextBox.Text = project.Tools?.FfprobePath ?? "";
+            // --- Tool overrides (warn if project differs) ---
+            var currentFfmpeg = string.IsNullOrWhiteSpace(_settings.FfmpegPath) ? "" : _settings.FfmpegPath!.Trim();
+            var currentFfprobe = string.IsNullOrWhiteSpace(_settings.FfprobePath) ? "" : _settings.FfprobePath!.Trim();
 
-            _settings.FfmpegPath = string.IsNullOrWhiteSpace(project.Tools?.FfmpegPath) ? null : project.Tools!.FfmpegPath;
-            _settings.FfprobePath = string.IsNullOrWhiteSpace(project.Tools?.FfprobePath) ? null : project.Tools!.FfprobePath;
-            SaveSettingsToDisk(_settingsPath, _settings);
+            var projectFfmpeg = project.Tools?.FfmpegPath?.Trim() ?? "";
+            var projectFfprobe = project.Tools?.FfprobePath?.Trim() ?? "";
+
+            // Only prompt if the project specifies a non-empty path that differs from current
+            bool ffmpegDiffers = !string.IsNullOrWhiteSpace(projectFfmpeg) &&
+                                 !string.Equals(projectFfmpeg, currentFfmpeg, StringComparison.OrdinalIgnoreCase);
+
+            bool ffprobeDiffers = !string.IsNullOrWhiteSpace(projectFfprobe) &&
+                                  !string.Equals(projectFfprobe, currentFfprobe, StringComparison.OrdinalIgnoreCase);
+
+            bool useProjectTools = false;
+
+            if (ffmpegDiffers || ffprobeDiffers)
+            {
+                var msg =
+                    "This project specifies different tool locations than your current settings.\n\n" +
+                    (ffmpegDiffers ? $"Project ffmpeg:\n{projectFfmpeg}\nCurrent ffmpeg:\n{currentFfmpeg}\n\n" : "") +
+                    (ffprobeDiffers ? $"Project ffprobe:\n{projectFfprobe}\nCurrent ffprobe:\n{currentFfprobe}\n\n" : "") +
+                    "Do you want to use the project's tool paths for this import?";
+
+                useProjectTools = await ShowYesNoDialogAsync(
+                    "Project Tool Paths",
+                    msg,
+                    yesText: "Yes, use project tools",
+                    noText: "No, keep current");
+            }
+
+            if (useProjectTools)
+            {
+                if (!string.IsNullOrWhiteSpace(projectFfmpeg))
+                    FfmpegPathTextBox.Text = projectFfmpeg;
+
+                if (!string.IsNullOrWhiteSpace(projectFfprobe))
+                    FfprobePathTextBox.Text = projectFfprobe;
+
+                //_settings.FfmpegPath = string.IsNullOrWhiteSpace(projectFfmpeg) ? null : projectFfmpeg;
+                //_settings.FfprobePath = string.IsNullOrWhiteSpace(projectFfprobe) ? null : projectFfprobe;
+
+                //SaveSettingsToDisk(_settingsPath, _settings);
+            }
+            else
+            {
+                // Keep current settings in UI
+                FfmpegPathTextBox.Text = currentFfmpeg;
+                FfprobePathTextBox.Text = currentFfprobe;
+            }
+
 
             // Replace current inputs list
             _inputs.Clear();
@@ -870,6 +930,11 @@ private FontOption? FindFontByName(string name) =>
 
     private async void Run_OnClick(object? sender, RoutedEventArgs e)
     {
+
+        if (_isProcessing)
+            return;
+
+
         OutputTextBox.Text = "";
 
         if (_inputs.Count == 0)
@@ -938,7 +1003,7 @@ private FontOption? FindFontByName(string name) =>
             if (string.IsNullOrWhiteSpace(debugLevel))
                 debugLevel = "None";
 
-            _isProcessing = true;
+            SetProcessingUiState(true);
 
             // Run the Core processor directly
             var result = await VideoStamper.Core.ProjectProcessor.ProcessProjectAsync(
@@ -959,12 +1024,12 @@ private FontOption? FindFontByName(string name) =>
 
             await HandleRunFinishedAsync(result.Message);
 
-            var post = await ShowPostRunPromptAsync();
+            /*var post = await ShowPostRunPromptAsync();
             if (post == PostRunPromptResult.QuitWithoutSaving)
             {
                 _suppressClosePrompt = true;
                 Close();
-            }
+            }*/
         }
         catch (OperationCanceledException)
         {
@@ -973,12 +1038,12 @@ private FontOption? FindFontByName(string name) =>
 
             await HandleRunFinishedAsync("Canceled.");
 
-            var post = await ShowPostRunPromptAsync();
+            /*var post = await ShowPostRunPromptAsync();
             if (post == PostRunPromptResult.QuitWithoutSaving)
             {
                 _suppressClosePrompt = true;
                 Close();
-            }
+            }*/
         }
         catch (Exception ex)
         {
@@ -990,7 +1055,8 @@ private FontOption? FindFontByName(string name) =>
         }
         finally
         {
-            _isProcessing = false;
+            SetProcessingUiState(false);
+
             cts?.Dispose();
             try
             {
@@ -1527,7 +1593,7 @@ private FontOption? FindFontByName(string name) =>
         ScrollViewer.SetHorizontalScrollBarVisibility(msgBox, ScrollBarVisibility.Disabled);
 
         var continueBtn = new Button { Content = "Continue", MinWidth = 140, Margin = new Thickness(0, 0, 8, 0) };
-        var quitBtn = new Button { Content = "Quit without Exporting", MinWidth = 200 };
+        var quitBtn = new Button { Content = "Quit without Exporting Project File", MinWidth = 200 };
 
         continueBtn.Click += (_, __) =>
         {
@@ -1934,6 +2000,22 @@ private FontOption? FindFontByName(string name) =>
             return;
 
         _isDirty = true;
+    }
+
+    private void SetProcessingUiState(bool isProcessing)
+    {
+        _isProcessing = isProcessing;
+
+        RunButton.IsEnabled = !isProcessing;
+        AddInputButton.IsEnabled = !isProcessing;
+        RemoveInputButton.IsEnabled = !isProcessing;
+        MoveInputUpButton.IsEnabled = !isProcessing;
+        MoveInputDownButton.IsEnabled = !isProcessing;
+        ImportProjectButton.IsEnabled = !isProcessing;
+        ExportProjectButton.IsEnabled = !isProcessing;
+        AddSubtitleButton.IsEnabled = !isProcessing;
+        AddCustomFontButton.IsEnabled = !isProcessing;
+        ResetTimestampButton.IsEnabled = !isProcessing;
     }
 
     private void UpdateTimestampEnabledState()
@@ -2358,6 +2440,48 @@ private FontOption? FindFontByName(string name) =>
         return "VideoStamper.Cli";
     }
 
+    private static string getPlatformAutoInstallURL(string toolname)
+    {
+
+        switch(toolname) {
+            case "ffmpeg":
+                if (OperatingSystem.IsMacOS())
+                    return "https://evermeet.cx/ffmpeg/get/zip";
+                if (OperatingSystem.IsWindows())
+                    return "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+                if (OperatingSystem.IsLinux())
+                    if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz";
+                    else
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl-shared.tar.xz";
+                break;
+           case "ffprobe":
+                if (OperatingSystem.IsMacOS())
+                    return "https://evermeet.cx/ffmpeg/get/ffprobe/zip";
+                if (OperatingSystem.IsWindows())
+                    return "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+                if (OperatingSystem.IsLinux())
+                    if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz";
+                    else
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl-shared.tar.xz";
+                break;
+          case "ffplay":
+                if (OperatingSystem.IsMacOS())
+                    return "https://evermeet.cx/ffmpeg/get/ffplay/zip";
+                if (OperatingSystem.IsWindows())
+                    return "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+                if (OperatingSystem.IsLinux())
+                    if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz";
+                    else
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl-shared.tar.xz";
+                break;
+        }
+
+        return "unknown";
+    }
+
     private static string GetPlatformSubfolder()
     {
         if (OperatingSystem.IsMacOS())
@@ -2374,20 +2498,38 @@ private FontOption? FindFontByName(string name) =>
 
     private static string? GetDefaultFfmpegPath()
     {
-        var baseDir = Directory.GetCurrentDirectory();
-        var sub = GetPlatformSubfolder();
         var fileName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
-        var candidate = Path.Combine(baseDir, "bin", sub, fileName);
-        return File.Exists(candidate) ? candidate : null;
+
+        // 1) App Support install dir (your new “expected” location)
+        var appSupportCandidate = Path.Combine(GetToolsInstallDir(), fileName);
+        if (File.Exists(appSupportCandidate)) return appSupportCandidate;
+
+        // 2) Bundled next to app (optional)
+        var bundled = GetBundledBinDir();
+        if (!string.IsNullOrWhiteSpace(bundled))
+        {
+            var bundledCandidate = Path.Combine(bundled!, fileName);
+            if (File.Exists(bundledCandidate)) return bundledCandidate;
+        }
+
+        return null;
     }
 
     private static string? GetDefaultFfprobePath()
     {
-        var baseDir = Directory.GetCurrentDirectory();
-        var sub = GetPlatformSubfolder();
         var fileName = OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe";
-        var candidate = Path.Combine(baseDir, "bin", sub, fileName);
-        return File.Exists(candidate) ? candidate : null;
+
+        var appSupportCandidate = Path.Combine(GetToolsInstallDir(), fileName);
+        if (File.Exists(appSupportCandidate)) return appSupportCandidate;
+
+        var bundled = GetBundledBinDir();
+        if (!string.IsNullOrWhiteSpace(bundled))
+        {
+            var bundledCandidate = Path.Combine(bundled!, fileName);
+            if (File.Exists(bundledCandidate)) return bundledCandidate;
+        }
+
+        return null;
     }
 
     private static bool IsToolFile(string path, string toolBaseName)
@@ -2423,6 +2565,276 @@ private FontOption? FindFontByName(string name) =>
 
         return cleaned;
     }
+
+    private static string GetAppSupportDir()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var folder = Path.Combine(appData, "VideoStamper");
+        Directory.CreateDirectory(folder);
+        return folder;
+    }
+
+    private static string GetToolsInstallDir()
+    {
+        var dir = Path.Combine(GetAppSupportDir(), "bin", GetPlatformSubfolder());
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static string? GetBundledBinDir()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var sub = GetPlatformSubfolder();
+        var candidate = Path.Combine(baseDir, "bin", sub);
+        return Directory.Exists(candidate) ? candidate : null;
+    }
+
+    private async Task<bool> TryAutoInstallFfmpegToolsWithUiAsync()
+    {
+        return await ShowToolInstallProgressDialogAsync(async progress =>
+        {
+
+            var destDir = GetToolsInstallDir();
+            progress.Report(new ToolInstallProgress { Message = $"Installing to:\n{destDir}", Percent = null });
+
+            using var http = new System.Net.Http.HttpClient();
+
+            if (OperatingSystem.IsMacOS())
+            {
+                await DownloadAndInstallSingleMacToolAsync("ffmpeg",  FfmpegZipUrl,  destDir, http, progress);
+                await DownloadAndInstallSingleMacToolAsync("ffprobe", FfprobeZipUrl, destDir, http, progress);
+
+                var ok = File.Exists(Path.Combine(destDir, "ffmpeg")) &&
+                         File.Exists(Path.Combine(destDir, "ffprobe"));
+
+                return ok
+                    ? (true, "FFmpeg tools installed successfully.\n\nClick OK to continue.")
+                    : (false, "Download or Install failure.\n\nClick OK to continue.");
+            }
+
+            if (OperatingSystem.IsWindows())
+            {
+                await DownloadAndInstallWindowsToolsFromZipAsync(FfmpegZipUrl, destDir, http, progress);
+
+                var ok = File.Exists(Path.Combine(destDir, "ffmpeg.exe")) &&
+                         File.Exists(Path.Combine(destDir, "ffprobe.exe"));
+
+                return ok
+                    ? (true, "FFmpeg tools installed successfully.\n\nClick OK to continue.")
+                    : (false, "Download or Install failure.\n\nClick OK to continue.");
+            }
+
+            if (OperatingSystem.IsLinux())
+            {
+                await DownloadAndInstallLinuxToolsFromTarXzAsync(FfmpegZipUrl, destDir, http, progress);
+
+                var ok = File.Exists(Path.Combine(destDir, "ffmpeg")) &&
+                         File.Exists(Path.Combine(destDir, "ffprobe"));
+
+                return ok
+                    ? (true, "FFmpeg tools installed successfully.\n\nClick OK to continue.")
+                    : (false, "Download or Install failure.\n\nClick OK to continue.");
+            }
+
+            return (false, "Unsupported OS for auto-install.\n\nClick OK to continue.");
+        });
+    }
+
+    private static async Task DownloadAndInstallSingleMacToolAsync(
+        string toolName,
+        string zipUrl,
+        string destDir,
+        HttpClient http,
+        IProgress<ToolInstallProgress> progress)
+    {
+        var tmpZip = Path.Combine(Path.GetTempPath(), $"VideoStamper-{toolName}-{Guid.NewGuid():N}.zip");
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"VideoStamper-{toolName}-extract-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+
+        await DownloadFileWithProgressAsync(http, zipUrl, tmpZip, progress, toolName);
+
+        progress.Report(new ToolInstallProgress { Message = $"Extracting {toolName}...", Percent = null });
+        System.IO.Compression.ZipFile.ExtractToDirectory(tmpZip, tmpDir, overwriteFiles: true);
+
+        var extracted = Directory.EnumerateFiles(tmpDir, toolName, SearchOption.AllDirectories).FirstOrDefault();
+        if (extracted is null)
+            throw new InvalidOperationException($"Could not find '{toolName}' inside downloaded zip.");
+
+        var destPath = Path.Combine(destDir, toolName);
+        File.Copy(extracted, destPath, overwrite: true);
+
+        progress.Report(new ToolInstallProgress { Message = $"Setting permissions for {toolName}...", Percent = null });
+        try
+        {
+            var mode =
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+            if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+            {
+                File.SetUnixFileMode(destPath, mode);
+            }
+
+        }
+        catch
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "/bin/chmod",
+                ArgumentList = { "+x", destPath },
+                UseShellExecute = false
+            };
+            using var p = Process.Start(psi);
+            if (p != null) await p.WaitForExitAsync();
+        }
+
+        // Best-effort quarantine removal
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "/usr/bin/xattr",
+                ArgumentList = { "-dr", "com.apple.quarantine", destPath },
+                UseShellExecute = false
+            };
+            using var p = Process.Start(psi);
+            if (p != null) await p.WaitForExitAsync();
+        }
+        catch { }
+
+        progress.Report(new ToolInstallProgress { Message = $"Installed {toolName}.", Percent = 100 });
+
+        try { if (File.Exists(tmpZip)) File.Delete(tmpZip); } catch { }
+        try { if (Directory.Exists(tmpDir)) Directory.Delete(tmpDir, recursive: true); } catch { }
+    }
+
+    private static async Task DownloadAndInstallWindowsToolsFromZipAsync(
+        string zipUrl,
+        string destDir,
+        HttpClient http,
+        IProgress<ToolInstallProgress> progress)
+    {
+        progress.Report(new ToolInstallProgress { Message = "Downloading FFmpeg (Windows zip)...", Percent = null });
+
+        var tmpZip = Path.Combine(Path.GetTempPath(), $"VideoStamper-ffmpeg-win-{Guid.NewGuid():N}.zip");
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"VideoStamper-ffmpeg-win-extract-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+
+        await DownloadFileWithProgressAsync(http, zipUrl, tmpZip, progress, "Windows FFmpeg zip");
+
+        progress.Report(new ToolInstallProgress { Message = "Extracting zip...", Percent = null });
+        System.IO.Compression.ZipFile.ExtractToDirectory(tmpZip, tmpDir, overwriteFiles: true);
+
+        // Find "bin" directory inside extracted structure
+        var binDir = Directory.EnumerateDirectories(tmpDir, "bin", SearchOption.AllDirectories)
+            .FirstOrDefault();
+
+        if (binDir is null)
+            throw new InvalidOperationException("Could not find 'bin' directory in FFmpeg zip.");
+
+        CopyIfExists(Path.Combine(binDir, "ffmpeg.exe"),  Path.Combine(destDir, "ffmpeg.exe"));
+        CopyIfExists(Path.Combine(binDir, "ffprobe.exe"), Path.Combine(destDir, "ffprobe.exe"));
+        CopyIfExists(Path.Combine(binDir, "ffplay.exe"),  Path.Combine(destDir, "ffplay.exe"));
+
+        progress.Report(new ToolInstallProgress { Message = "Installed Windows tools.", Percent = 100 });
+
+        TryDeleteFile(tmpZip);
+        TryDeleteDir(tmpDir);
+    }
+
+    private static void CopyIfExists(string src, string dest)
+    {
+        if (File.Exists(src))
+            File.Copy(src, dest, overwrite: true);
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
+
+    private static void TryDeleteDir(string path)
+    {
+        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); } catch { }
+    }
+
+    private static async Task DownloadAndInstallLinuxToolsFromTarXzAsync(
+        string tarXzUrl,
+        string destDir,
+        HttpClient http,
+        IProgress<ToolInstallProgress> progress)
+    {
+        var tmpTarXz = Path.Combine(Path.GetTempPath(), $"VideoStamper-ffmpeg-linux-{Guid.NewGuid():N}.tar.xz");
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"VideoStamper-ffmpeg-linux-extract-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+
+        await DownloadFileWithProgressAsync(http, tarXzUrl, tmpTarXz, progress, "Linux FFmpeg tar.xz");
+
+        progress.Report(new ToolInstallProgress { Message = "Extracting tar.xz (tar -xJf)...", Percent = null });
+
+        // tar -xJf archive.tar.xz -C tmpDir
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "tar",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        psi.ArgumentList.Add("-xJf");
+        psi.ArgumentList.Add(tmpTarXz);
+        psi.ArgumentList.Add("-C");
+        psi.ArgumentList.Add(tmpDir);
+
+        using (var p = System.Diagnostics.Process.Start(psi))
+        {
+            if (p == null) throw new InvalidOperationException("Failed to start 'tar' process.");
+            var stderr = await p.StandardError.ReadToEndAsync();
+            await p.WaitForExitAsync();
+            if (p.ExitCode != 0)
+                throw new InvalidOperationException($"tar extraction failed: {stderr}");
+        }
+
+        // Locate binaries (BtbN typically has ./bin/ffmpeg etc)
+        var ffmpeg = Directory.EnumerateFiles(tmpDir, "ffmpeg", SearchOption.AllDirectories).FirstOrDefault();
+        var ffprobe = Directory.EnumerateFiles(tmpDir, "ffprobe", SearchOption.AllDirectories).FirstOrDefault();
+        var ffplay  = Directory.EnumerateFiles(tmpDir, "ffplay",  SearchOption.AllDirectories).FirstOrDefault();
+
+        if (ffmpeg is null || ffprobe is null)
+            throw new InvalidOperationException("Could not find ffmpeg/ffprobe after extracting archive.");
+
+        File.Copy(ffmpeg, Path.Combine(destDir, "ffmpeg"), overwrite: true);
+        File.Copy(ffprobe, Path.Combine(destDir, "ffprobe"), overwrite: true);
+        if (ffplay != null)
+            File.Copy(ffplay, Path.Combine(destDir, "ffplay"), overwrite: true);
+
+        // chmod +x
+        await ChmodPlusXAsync(Path.Combine(destDir, "ffmpeg"));
+        await ChmodPlusXAsync(Path.Combine(destDir, "ffprobe"));
+        if (File.Exists(Path.Combine(destDir, "ffplay")))
+            await ChmodPlusXAsync(Path.Combine(destDir, "ffplay"));
+
+        progress.Report(new ToolInstallProgress { Message = "Installed Linux tools.", Percent = 100 });
+
+        TryDeleteFile(tmpTarXz);
+        TryDeleteDir(tmpDir);
+    }
+
+    private static async Task ChmodPlusXAsync(string path)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "chmod",
+            UseShellExecute = false,
+            RedirectStandardError = true
+        };
+        psi.ArgumentList.Add("+x");
+        psi.ArgumentList.Add(path);
+
+        using var p = System.Diagnostics.Process.Start(psi);
+        if (p != null) await p.WaitForExitAsync();
+    }
+
+
 
     private async Task CheckAndPromptForToolsAsync()
     {
@@ -2499,23 +2911,233 @@ private FontOption? FindFontByName(string name) =>
             return;
         }
 
+        // 2.5. offer auto install for ffmpeg/ffprobe
+        
+        var shouldAutoInstall = await ShowYesNoDialogAsync(
+            title: "Install FFmpeg Tools",
+            message:
+                "VideoStamper couldn't find FFmpeg tools in the expected location.\n\n" +
+                "Would you like VideoStamper to automatically download and install ffmpeg/ffprobe to:\n" +
+                $"{GetToolsInstallDir()}\n\n" +
+                "You can also choose Skip to locate them manually.");
+
+        if (shouldAutoInstall)
+        {
+            var ok = await TryAutoInstallFfmpegToolsWithUiAsync();
+
+            var afterInstallDefault = resolveDefaultPath();
+            if (ok &&
+                !string.IsNullOrWhiteSpace(afterInstallDefault) &&
+                File.Exists(afterInstallDefault))
+            {
+                setTextBox(afterInstallDefault!);
+                saveSetting(afterInstallDefault!);
+                return;
+            }
+
+            // fall through to manual picker if install failed
+        }
+
+        
+
+
         // 3. Prompt the user with a modal file picker
         await PromptForToolAsync(displayName, path, expectedFileNames, setTextBox, saveSetting);
     }
 
+    private sealed class ToolInstallProgress
+    {
+        public string Message { get; init; } = "";
+        public double? Percent { get; init; } // 0..100, null = indeterminate
+    }
+
+    private async Task<bool> ShowToolInstallProgressDialogAsync(Func<IProgress<ToolInstallProgress>, Task<(bool ok, string resultMessage)>> work)
+    {
+        var tcsClosed = new TaskCompletionSource<bool>();
+
+        var win = new Window
+        {
+            Title = "Installing FFmpeg Tools",
+            Width = 640,
+            Height = 360,
+            MinHeight = 360,
+            MaxHeight = 360,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
+
+        var statusText = new TextBlock
+        {
+            Text = "Starting...",
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        };
+
+        var progressBar = new ProgressBar
+        {
+            IsIndeterminate = true,
+            Minimum = 0,
+            Maximum = 100,
+            Height = 18
+        };
+
+        var logBox = new TextBox
+        {
+            Text = "",
+            IsReadOnly = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 200
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(logBox, ScrollBarVisibility.Auto);
+        ScrollViewer.SetHorizontalScrollBarVisibility(logBox, ScrollBarVisibility.Disabled);
+
+        var okBtn = new Button
+        {
+            Content = "OK",
+            MinWidth = 120,
+            IsEnabled = false
+        };
+
+        okBtn.Click += (_, __) =>
+        {
+            tcsClosed.TrySetResult(true);
+            win.Close();
+        };
+
+        win.Closed += (_, __) =>
+        {
+            // If user closes via window chrome, treat like OK once enabled.
+            if (!tcsClosed.Task.IsCompleted)
+                tcsClosed.TrySetResult(false);
+        };
+
+        win.Content = new Grid
+        {
+            Margin = new Thickness(16),
+            RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"),
+            RowSpacing = 10,
+            Children =
+            {
+                statusText.WithGridRow(0),
+                progressBar.WithGridRow(1),
+                logBox.WithGridRow(2),
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                    Spacing = 8,
+                    Children = { okBtn }
+                }.WithGridRow(3)
+            }
+        };
+
+       // Show the dialog, then run work
+        win.Show(this);
+
+        ScrollViewer? logScroll = null;
+
+        win.Opened += (_, __) =>
+        {
+            logScroll = logBox.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+        };
+
+         // Progress handler (UI thread safe via Dispatcher)
+        var progress = new Progress<ToolInstallProgress>(p =>
+        {
+            statusText.Text = p.Message;
+
+            if (p.Percent is null)
+            {
+                progressBar.IsIndeterminate = true;
+            }
+            else
+            {
+                progressBar.IsIndeterminate = false;
+                progressBar.Value = Math.Clamp(p.Percent.Value, 0, 100);
+            }
+
+            logBox.Text += (logBox.Text.Length == 0 ? "" : "\n") + p.Message;
+            logBox.CaretIndex = logBox.Text.Length;
+
+            logScroll?.ScrollToEnd();
+        });
+
+        (bool ok, string resultMessage) result;
+        try
+        {
+            result = await work(progress);
+        }
+        catch (Exception ex)
+        {
+            result = (false, "Auto-install failed:\n" + ex.Message);
+        }
+
+        // Final UI update
+        statusText.Text = result.resultMessage;
+        logBox.Text += "\n\n" + result.resultMessage;
+        progressBar.IsIndeterminate = false;
+        progressBar.Value = result.ok ? 100 : progressBar.Value;
+        okBtn.IsEnabled = true;
+
+        // Require explicit OK click
+        await tcsClosed.Task;
+        return result.ok;
+    }
+
+    private static async Task DownloadFileWithProgressAsync(
+        HttpClient http,
+        string url,
+        string destinationPath,
+        IProgress<ToolInstallProgress> progress,
+        string label)
+    {
+        progress.Report(new ToolInstallProgress { Message = $"Downloading {label}...", Percent = null });
+
+        using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        resp.EnsureSuccessStatusCode();
+
+        var total = resp.Content.Headers.ContentLength;
+
+        await using var input = await resp.Content.ReadAsStreamAsync();
+        await using var output = File.Create(destinationPath);
+
+        var buffer = new byte[81920];
+        long readTotal = 0;
+        int read;
+
+        while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length))) > 0)
+        {
+            await output.WriteAsync(buffer.AsMemory(0, read));
+            readTotal += read;
+
+            if (total.HasValue && total.Value > 0)
+            {
+                var pct = (readTotal / (double)total.Value) * 100.0;
+                progress.Report(new ToolInstallProgress
+                {
+                    Message = $"Downloading {label}... {pct:0}%",
+                    Percent = pct
+                });
+            }
+        }
+
+        progress.Report(new ToolInstallProgress { Message = $"Downloaded {label}.", Percent = 100 });
+    }
+
+
     private async Task PromptForToolAsync(
     string displayName,
-    string foundInstead,
+    string? foundInstead,
     string[] expectedFileNames,
     Action<string> setTextBox,
     Action<string?> saveSetting)
     {
+        var found = string.IsNullOrWhiteSpace(foundInstead) ? "(unset)" : foundInstead;
         while (true)
         {
             var files = await StorageProvider.OpenFilePickerAsync(
                 new FilePickerOpenOptions
                 {
-                    Title = $"{displayName} was not found. Found {foundInstead} instead. Please locate its executable.",
+                    Title = $"{displayName} was not found. Found {found} instead. Please locate its executable.",
                     AllowMultiple = false
                 });
 
@@ -2636,6 +3258,91 @@ private FontOption? FindFontByName(string name) =>
             AppendStatus(ex.ToString());
         }
     }
+
+    private async Task<bool> ShowYesNoDialogAsync(
+        string title,
+        string message,
+        string yesText = "Download",
+        string noText = "Skip")
+    {
+        var tcs = new TaskCompletionSource<bool>();
+
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 560,
+            MinHeight = 190,
+            MaxHeight = 300,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+
+        var yesBtn = new Button { Content = yesText, MinWidth = 120 };
+        var noBtn  = new Button { Content = noText,  MinWidth = 90 };
+
+        yesBtn.Click += (_, __) =>
+        {
+            tcs.TrySetResult(true);
+            dialog.Close();
+        };
+
+        noBtn.Click += (_, __) =>
+        {
+            tcs.TrySetResult(false);
+            dialog.Close();
+        };
+
+        dialog.Closed += (_, __) =>
+        {
+            // Treat window close as "No"
+            if (!tcs.Task.IsCompleted)
+                tcs.TrySetResult(false);
+        };
+
+        var messageBlock = new TextBlock
+        {
+            Text = message,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        };
+
+        var scroll = new ScrollViewer
+        {
+            Content = messageBlock,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
+        };
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Spacing = 8,
+            Children = { yesBtn, noBtn }
+        };
+
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            LastChildFill = true,
+            Children =
+            {
+                // Buttons pinned at bottom
+                new DockPanel
+                {
+                    [DockPanel.DockProperty] = Dock.Bottom,
+                    Children = { buttonRow }
+                },
+
+                // Scrollable message area fills remaining space
+                scroll
+            }
+        };
+
+        await dialog.ShowDialog(this);
+        return await tcs.Task;
+    }
+
 
     // ------------- Quit / post-run prompts -------------
 

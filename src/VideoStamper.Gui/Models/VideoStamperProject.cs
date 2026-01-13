@@ -42,11 +42,11 @@ public class InputSettings
             if (string.IsNullOrWhiteSpace(Path))
                 return string.Empty;
 
-            return System.IO.Path.GetFileName(Path);
+            return System.IO.Path.GetFileName(Path!);
         }
     }
 
-     [JsonIgnore]
+    [JsonIgnore]
     public string? TimestampMonth { get; set; }
 
     [JsonIgnore]
@@ -146,11 +146,36 @@ public class SubtitleSettings
     public PositionSettings Position { get; set; } = new();
 
     // Animations – names match the XAML bindings
-    public string InAnimation { get; set; } = "None";
-    public string OutAnimation { get; set; } = "None";
+    public string? AnimationIn { get; set; } = "None";
+    public string? AnimationOut { get; set; } = "None";
 
-    public double InAnimationDuration { get; set; } = 0.5;
-    public double OutAnimationDuration { get; set; } = 0.5;
+    public double AnimationInDur { get; set; } = 0.5;
+    public double AnimationOutDur { get; set; } = 0.5;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? SelectedAnimationInOption
+    { 
+        get => string.IsNullOrWhiteSpace(AnimationIn) || AnimationIn.Equals("None", StringComparison.OrdinalIgnoreCase)
+            ? "None"
+            : AnimationIn;
+        set => AnimationIn =
+            string.Equals(value, "None", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : value;
+
+    }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? SelectedAnimationOutOption
+    {
+        get => string.IsNullOrWhiteSpace(AnimationOut) || AnimationOut.Equals("None", StringComparison.OrdinalIgnoreCase)
+            ? "None"
+            : AnimationOut;
+        set => AnimationOut =
+            string.Equals(value, "None", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : value;
+    }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public int Index { get;set; }

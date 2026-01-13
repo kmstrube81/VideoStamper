@@ -28,6 +28,7 @@ public static class ProjectProcessor
             case "--info":
             case "info":
             case "Info":
+            case "INFO":
                 Globals.DEBUG = 1;
                 Globals.DEBUG_LEVEL = "INFO";
                 break;
@@ -35,6 +36,7 @@ public static class ProjectProcessor
             case "--verbose":
             case "verbose":
             case "Verbose":
+            case "VERBOSE":
                 Globals.DEBUG = 2;
                 Globals.DEBUG_LEVEL = "VERBOSE";
                 break;
@@ -42,6 +44,7 @@ public static class ProjectProcessor
             case "--debug":
             case "debug":
             case "Debug":
+            case "DEBUG":
                 Globals.DEBUG = 3;
                 Globals.DEBUG_LEVEL = "DEBUG";
                 break;
