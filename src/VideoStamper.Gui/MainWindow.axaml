@@ -5,7 +5,7 @@
         x:Class="VideoStamper.Gui.MainWindow"
         Title="Video Stamper"
         Width="900" Height="650"
-	Icon="Assets/VideoStamper.ico">
+	Icon="avares://VideoStamper.Gui/Assets/VideoStamper.ico">
 	<Window.Resources>
 	    <local:InverseBooleanConverter x:Key="InverseBooleanConverter" />
 	</Window.Resources>
