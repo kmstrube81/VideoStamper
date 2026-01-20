@@ -2654,7 +2654,10 @@ private FontOption? FindFontByName(string name) =>
         await DownloadFileWithProgressAsync(http, zipUrl, tmpZip, progress, toolName);
 
         progress.Report(new ToolInstallProgress { Message = $"Extracting {toolName}...", Percent = null });
-        System.IO.Compression.ZipFile.ExtractToDirectory(tmpZip, tmpDir, overwriteFiles: true);
+        await Task.Run(() =>
+        {
+            System.IO.Compression.ZipFile.ExtractToDirectory(tmpZip, tmpDir, overwriteFiles: true);
+        });
 
         var extracted = Directory.EnumerateFiles(tmpDir, toolName, SearchOption.AllDirectories).FirstOrDefault();
         if (extracted is null)
@@ -2723,7 +2726,10 @@ private FontOption? FindFontByName(string name) =>
         await DownloadFileWithProgressAsync(http, zipUrl, tmpZip, progress, "Windows FFmpeg zip");
 
         progress.Report(new ToolInstallProgress { Message = "Extracting zip...", Percent = null });
-        System.IO.Compression.ZipFile.ExtractToDirectory(tmpZip, tmpDir, overwriteFiles: true);
+        await Task.Run(() =>
+        {
+            System.IO.Compression.ZipFile.ExtractToDirectory(tmpZip, tmpDir, overwriteFiles: true);
+        });
 
         // Find "bin" directory inside extracted structure
         var binDir = Directory.EnumerateDirectories(tmpDir, "bin", SearchOption.AllDirectories)
@@ -3040,11 +3046,14 @@ private FontOption? FindFontByName(string name) =>
             logScroll = logBox.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
         };
 
+        string? lastLogLine = null;
          // Progress handler (UI thread safe via Dispatcher)
         var progress = new Progress<ToolInstallProgress>(p =>
         {
+            // Always update the main status text
             statusText.Text = p.Message;
 
+            // Update progress bar
             if (p.Percent is null)
             {
                 progressBar.IsIndeterminate = true;
@@ -3055,16 +3064,22 @@ private FontOption? FindFontByName(string name) =>
                 progressBar.Value = Math.Clamp(p.Percent.Value, 0, 100);
             }
 
-            logBox.Text += (logBox.Text.Length == 0 ? "" : "\n") + p.Message;
-            logBox.CaretIndex = logBox.Text.Length;
+            // Only append to the log if it's not identical to the last appended line
+            if (!string.Equals(lastLogLine, p.Message, StringComparison.Ordinal))
+            {
+                lastLogLine = p.Message;
+                logBox.Text += (logBox.Text.Length == 0 ? "" : "\n") + p.Message;
+                logBox.CaretIndex = logBox.Text.Length;
+                logScroll?.ScrollToEnd();
+            }
 
-            logScroll?.ScrollToEnd();
         });
 
         (bool ok, string resultMessage) result;
         try
         {
-            result = await work(progress);
+            // Run the heavy work on a background thread so the UI stays responsive.
+            result = await Task.Run(async () => await work(progress));
         }
         catch (Exception ex)
         {
@@ -3090,6 +3105,10 @@ private FontOption? FindFontByName(string name) =>
         IProgress<ToolInstallProgress> progress,
         string label)
     {
+
+        int lastPctInt = -1;
+        var lastReport = DateTime.UtcNow;
+
         progress.Report(new ToolInstallProgress { Message = $"Downloading {label}...", Percent = null });
 
         using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
@@ -3112,12 +3131,23 @@ private FontOption? FindFontByName(string name) =>
             if (total.HasValue && total.Value > 0)
             {
                 var pct = (readTotal / (double)total.Value) * 100.0;
-                progress.Report(new ToolInstallProgress
+                var pctInt = (int)Math.Floor(pct);
+
+                // report only when the integer percentage changes OR every 250ms (whichever is slower)
+                var now = DateTime.UtcNow;
+                if (pctInt != lastPctInt && (now - lastReport).TotalMilliseconds >= 250)
                 {
-                    Message = $"Downloading {label}... {pct:0}%",
-                    Percent = pct
-                });
-            }
+                    lastPctInt = pctInt;
+                    lastReport = now;
+
+                    progress.Report(new ToolInstallProgress
+                    {
+                        Message = $"Downloading {label}... {pctInt}%",
+                        Percent = pctInt
+                    });
+                }
+
+           }
         }
 
         progress.Report(new ToolInstallProgress { Message = $"Downloaded {label}.", Percent = 100 });
