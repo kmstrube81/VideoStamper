@@ -37,6 +37,9 @@ internal static class ControlExtensions
 
 public partial class MainWindow : Window
 {
+
+    private readonly string _versionNumber = "0.4";
+
     private readonly JsonSerializerOptions _jsonOptions =
         new JsonSerializerOptions
         {
@@ -46,9 +49,11 @@ public partial class MainWindow : Window
             PropertyNameCaseInsensitive = true
         };
 
-
-    private string FfmpegZipUrl  = getPlatformAutoInstallURL("ffmpeg");
-    private string FfprobeZipUrl = getPlatformAutoInstallURL("ffprobe");
+    private static readonly HttpClient httpClient = new System.Net.Http.HttpClient();
+    private string FfmpegZipUrl  = GetPlatformAutoInstallURL("ffmpeg");
+    private string FfprobeZipUrl = GetPlatformAutoInstallURL("ffprobe");
+    private string FfmpegInfoUrl = GetPlatformInfoURL("ffmpeg");
+    private string FfprobeInfoUrl = GetPlatformInfoURL("ffprobe");
 
     private readonly ObservableCollection<InputSettings> _inputs = new();
     private int _currentInputIndex = -1;
@@ -82,7 +87,6 @@ public partial class MainWindow : Window
         public override string ToString() => Name;
     }
 
-    //public IEnumerable<string> FontOptions => _fontOptions.Select(f => f.Path);
     public IEnumerable FontOptions => _fontOptions;
 
     private sealed class BorderColorOption
@@ -569,11 +573,7 @@ public partial class MainWindow : Window
                 ?? BorderColorOptionsInternal[0];
         }
     }
-/*
-private FontOption? FindFontByName(string name) =>
-    _fontOptions.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
 
-*/
     //--- Advanced Settings Tool Path On Clicks ---
     private async void BrowseCli_OnClick(object? sender, RoutedEventArgs e)
     {
@@ -647,6 +647,14 @@ private FontOption? FindFontByName(string name) =>
         SaveSettingsToDisk(_settingsPath, _settings);
     }
 
+    private async void About_OnClick(object? sender, RoutedEventArgs e)
+    {
+        string? FfmpegVer =  await GetLatestToolVersion("ffmpeg");
+        await ShowSimpleInfoDialogAsync(
+            title: "About VideoStamper",
+            message: $"Version {_versionNumber}\nTEST: FFMPEG version {FfmpegVer}");
+    }
+
     // ------------- Importer/Exporter ------
 
     private async void ExportProject_OnClick(object? sender, RoutedEventArgs e)
@@ -683,7 +691,7 @@ private FontOption? FindFontByName(string name) =>
             var save = await StorageProvider.SaveFilePickerAsync(
                 new FilePickerSaveOptions
                 {
-                    Title = "Export VideoStamper project JSON",
+                    Title = "Save VideoStamper project JSON",
                     SuggestedFileName = safeName + ".json",
                     DefaultExtension = "json",
                     FileTypeChoices = new[]
@@ -699,7 +707,7 @@ private FontOption? FindFontByName(string name) =>
             {
                 // user cancelled
                 if (showMessages)
-                    OutputTextBox.Text = "Export canceled.";
+                    OutputTextBox.Text = "Save canceled.";
                 return false;
             }
 
@@ -710,14 +718,14 @@ private FontOption? FindFontByName(string name) =>
             _isDirty = false;
 
             if (showMessages)
-                OutputTextBox.Text = $"Exported project JSON to:\n{save.Path.LocalPath}\n";
+                OutputTextBox.Text = $"Saved project JSON to:\n{save.Path.LocalPath}\n";
 
             return true;
         }
         catch (Exception ex)
         {
             if (showMessages)
-                OutputTextBox.Text = "ERROR exporting project:\n" + ex;
+                OutputTextBox.Text = "ERROR saving project:\n" + ex;
             return false;
         }
     }
@@ -734,7 +742,7 @@ private FontOption? FindFontByName(string name) =>
             var files = await StorageProvider.OpenFilePickerAsync(
                 new FilePickerOpenOptions
                 {
-                    Title = "Import VideoStamper project JSON",
+                    Title = "Open VideoStamper project JSON",
                     AllowMultiple = false,
                     FileTypeFilter = new[]
                     {
@@ -769,7 +777,7 @@ private FontOption? FindFontByName(string name) =>
                 {
                     var replacement = await PromptForReplacementVideoAsync(path);
                     if (replacement == null)
-                        throw new OperationCanceledException("Import canceled while selecting a replacement input video.");
+                        throw new OperationCanceledException("Open canceled while selecting a replacement input video.");
 
                     input.Path = replacement;
                 }
@@ -829,7 +837,7 @@ private FontOption? FindFontByName(string name) =>
                     "This project specifies different tool locations than your current settings.\n\n" +
                     (ffmpegDiffers ? $"Project ffmpeg:\n{projectFfmpeg}\nCurrent ffmpeg:\n{currentFfmpeg}\n\n" : "") +
                     (ffprobeDiffers ? $"Project ffprobe:\n{projectFfprobe}\nCurrent ffprobe:\n{currentFfprobe}\n\n" : "") +
-                    "Do you want to use the project's tool paths for this import?";
+                    "Do you want to use the project files's tool paths for this job?";
 
                 useProjectTools = await ShowYesNoDialogAsync(
                     "Project Tool Paths",
@@ -875,15 +883,15 @@ private FontOption? FindFontByName(string name) =>
             // Imported content is not yet exported in this session.
             _isDirty = true;
 
-            OutputTextBox.Text = $"Imported project:\n{jsonPath}\n";
+            OutputTextBox.Text = $"Opened project:\n{jsonPath}\n";
         }
         catch (OperationCanceledException)
         {
-            OutputTextBox.Text = "Import canceled.";
+            OutputTextBox.Text = "Open canceled.";
         }
         catch (Exception ex)
         {
-            OutputTextBox.Text = "ERROR importing project:\n" + ex;
+            OutputTextBox.Text = "ERROR opening project:\n" + ex;
         }
     }
 
@@ -1548,7 +1556,7 @@ private FontOption? FindFontByName(string name) =>
 
     }
 
-    // ------------- Post-run prompt -------------
+    // Post run dialog constructor
 
     private enum PostRunChoice
     {
@@ -1593,7 +1601,7 @@ private FontOption? FindFontByName(string name) =>
         ScrollViewer.SetHorizontalScrollBarVisibility(msgBox, ScrollBarVisibility.Disabled);
 
         var continueBtn = new Button { Content = "Continue", MinWidth = 140, Margin = new Thickness(0, 0, 8, 0) };
-        var quitBtn = new Button { Content = "Quit without Exporting Project File", MinWidth = 200 };
+        var quitBtn = new Button { Content = "Quit without Saving Project File", MinWidth = 200 };
 
         continueBtn.Click += (_, __) =>
         {
@@ -2440,7 +2448,7 @@ private FontOption? FindFontByName(string name) =>
         return "VideoStamper.Cli";
     }
 
-    private static string getPlatformAutoInstallURL(string toolname)
+    private static string GetPlatformAutoInstallURL(string toolname)
     {
 
         switch(toolname) {
@@ -2453,7 +2461,7 @@ private FontOption? FindFontByName(string name) =>
                     if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
                         return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz";
                     else
-                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl-shared.tar.xz";
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl.tar.xz";
                 break;
            case "ffprobe":
                 if (OperatingSystem.IsMacOS())
@@ -2464,7 +2472,7 @@ private FontOption? FindFontByName(string name) =>
                     if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
                         return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz";
                     else
-                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl-shared.tar.xz";
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl.tar.xz";
                 break;
           case "ffplay":
                 if (OperatingSystem.IsMacOS())
@@ -2475,7 +2483,40 @@ private FontOption? FindFontByName(string name) =>
                     if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
                         return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz";
                     else
-                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl-shared.tar.xz";
+                        return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-lgpl.tar.xz";
+                break;
+        }
+
+        return "unknown";
+    }
+
+    private static string GetPlatformInfoURL(string toolname)
+    {
+
+        switch(toolname) {
+            case "ffmpeg":
+                if (OperatingSystem.IsMacOS())
+                    return "https://evermeet.cx/ffmpeg/info/ffmpeg/snapshot";
+                if (OperatingSystem.IsWindows())
+                    return "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.0.1-essentials_build.zip.sha256";
+                if (OperatingSystem.IsLinux())
+                    return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/checksums.sha256";
+                break;
+           case "ffprobe":
+                if (OperatingSystem.IsMacOS())
+                    return "https://evermeet.cx/ffmpeg/info/ffprobe/snapshot";
+                if (OperatingSystem.IsWindows())
+                    return "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.0.1-essentials_build.zip.sha256";
+                if (OperatingSystem.IsLinux())
+                    return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/checksums.sha256";
+                break;
+          case "ffplay":
+                if (OperatingSystem.IsMacOS())
+                    return "https://evermeet.cx/ffmpeg/info/ffplay/snapshot";
+                if (OperatingSystem.IsWindows())
+                    return "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.0.1-essentials_build.zip.sha256";
+                if (OperatingSystem.IsLinux())
+                    return "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/checksums.sha256";
                 break;
         }
 
@@ -2589,6 +2630,52 @@ private FontOption? FindFontByName(string name) =>
         return Directory.Exists(candidate) ? candidate : null;
     }
 
+    private static string ParseFfToolsLinuxSHA(string checksumText, string platform)
+    {
+        // Decide target filename
+        var targetFile = platform == "ARM"
+            ? "ffmpeg-master-latest-linuxarm64-gpl.tar.xz"
+            : "ffmpeg-master-latest-linux64-lgpl.tar.xz";
+
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var line in checksumText.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0) continue;
+
+            // Split on whitespace (handles double spaces cleanly)
+            var parts = trimmed.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2) continue;
+
+            var checksum = parts[0];
+            var filename = parts[1];
+
+            map[filename] = checksum;
+        }
+
+        return map.TryGetValue(targetFile, out var sha)
+            ? sha
+            : "!";
+
+    }
+
+    public static string? ParseFfToolsMac(string json, string property)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return "!";
+
+        using var doc = JsonDocument.Parse(json);
+
+        if (doc.RootElement.TryGetProperty(property, out var v) &&
+            v.ValueKind == JsonValueKind.String)
+        {
+            return v.GetString();
+        }
+
+        return "!";
+    }
+
+
     private async Task<bool> TryAutoInstallFfmpegToolsWithUiAsync()
     {
         return await ShowToolInstallProgressDialogAsync(async progress =>
@@ -2597,12 +2684,12 @@ private FontOption? FindFontByName(string name) =>
             var destDir = GetToolsInstallDir();
             progress.Report(new ToolInstallProgress { Message = $"Installing to:\n{destDir}", Percent = null });
 
-            using var http = new System.Net.Http.HttpClient();
+            
 
             if (OperatingSystem.IsMacOS())
             {
-                await DownloadAndInstallSingleMacToolAsync("ffmpeg",  FfmpegZipUrl,  destDir, http, progress);
-                await DownloadAndInstallSingleMacToolAsync("ffprobe", FfprobeZipUrl, destDir, http, progress);
+                await DownloadAndInstallSingleMacToolAsync("ffmpeg",  FfmpegZipUrl,  destDir, httpClient, progress);
+                await DownloadAndInstallSingleMacToolAsync("ffprobe", FfprobeZipUrl, destDir, httpClient, progress);
 
                 var ok = File.Exists(Path.Combine(destDir, "ffmpeg")) &&
                          File.Exists(Path.Combine(destDir, "ffprobe"));
@@ -2614,7 +2701,7 @@ private FontOption? FindFontByName(string name) =>
 
             if (OperatingSystem.IsWindows())
             {
-                await DownloadAndInstallWindowsToolsFromZipAsync(FfmpegZipUrl, destDir, http, progress);
+                await DownloadAndInstallWindowsToolsFromZipAsync(FfmpegZipUrl, destDir, httpClient, progress);
 
                 var ok = File.Exists(Path.Combine(destDir, "ffmpeg.exe")) &&
                          File.Exists(Path.Combine(destDir, "ffprobe.exe"));
@@ -2626,7 +2713,7 @@ private FontOption? FindFontByName(string name) =>
 
             if (OperatingSystem.IsLinux())
             {
-                await DownloadAndInstallLinuxToolsFromTarXzAsync(FfmpegZipUrl, destDir, http, progress);
+                await DownloadAndInstallLinuxToolsFromTarXzAsync(FfmpegZipUrl, destDir, httpClient, progress);
 
                 var ok = File.Exists(Path.Combine(destDir, "ffmpeg")) &&
                          File.Exists(Path.Combine(destDir, "ffprobe"));
@@ -2861,7 +2948,8 @@ private FontOption? FindFontByName(string name) =>
             getCurrentPath: () => FfmpegPathTextBox.Text,
             resolveDefaultPath: GetDefaultFfmpegPath,
             setTextBox: path => FfmpegPathTextBox.Text = path ?? string.Empty,
-            saveSetting: path => _settings.FfmpegPath = path
+            savePathSetting: path => _settings.FfmpegPath = path,
+            saveVersionSetting: version => _settings.FfmpegVersion = version
         );
 
         // ffprobe
@@ -2871,7 +2959,8 @@ private FontOption? FindFontByName(string name) =>
             getCurrentPath: () => FfprobePathTextBox.Text,
             resolveDefaultPath: GetDefaultFfprobePath,
             setTextBox: path => FfprobePathTextBox.Text = path ?? string.Empty,
-            saveSetting: path => _settings.FfprobePath = path
+            savePathSetting: path => _settings.FfprobePath = path,
+            saveVersionSetting: version => _settings.FfprobeVersion = version
         );
 
         // Persist whatever we ended up with
@@ -2884,7 +2973,8 @@ private FontOption? FindFontByName(string name) =>
     Func<string?> getCurrentPath,
     Func<string?> resolveDefaultPath,
     Action<string> setTextBox,
-    Action<string?> saveSetting)
+    Action<string?> savePathSetting,
+    Action<string?> saveVersionSetting)
     {
         // Helper: does the filename match what we expect?
         bool IsExpectedFile(string path)
@@ -2894,6 +2984,12 @@ private FontOption? FindFontByName(string name) =>
                 string.Equals(e, fileName, StringComparison.OrdinalIgnoreCase));
         }
 
+        bool askToUpdate = false;
+        bool askToAutoInstall = true;
+
+        string? currentVer = GetCurrentToolVersion(displayName);
+        string? latestVer = await GetLatestToolVersion(displayName);
+
         // 1. Current value from textbox
         var path = getCurrentPath()?.Trim();
 
@@ -2902,8 +2998,13 @@ private FontOption? FindFontByName(string name) =>
             File.Exists(path))
         {
             // Looks good; store it
-            saveSetting(path);
-            return;
+            savePathSetting(path);
+            askToAutoInstall = false;
+            if(currentVer == latestVer) {
+                return;
+            } else {
+                askToUpdate = true;
+            }
         }
 
         // 2. Try default path for the platform
@@ -2913,42 +3014,136 @@ private FontOption? FindFontByName(string name) =>
             File.Exists(defaultPath!))
         {
             setTextBox(defaultPath!);
-            saveSetting(defaultPath!);
-            return;
+            savePathSetting(defaultPath!);
+            askToAutoInstall = false;
+
+            if(currentVer == latestVer) {
+                return;
+            } else {
+                askToUpdate = true;
+            }
         }
 
         // 2.5. offer auto install for ffmpeg/ffprobe
-        
-        var shouldAutoInstall = await ShowYesNoDialogAsync(
-            title: "Install FFmpeg Tools",
-            message:
-                "VideoStamper couldn't find FFmpeg tools in the expected location.\n\n" +
-                "Would you like VideoStamper to automatically download and install ffmpeg/ffprobe to:\n" +
-                $"{GetToolsInstallDir()}\n\n" +
-                "You can also choose Skip to locate them manually.");
+        if(askToAutoInstall) {
+            
+                var shouldAutoInstall = await ShowYesNoDialogAsync(
+                title: $"Install {displayName}",
+                message:
+                    $"VideoStamper couldn't find {displayName} in the expected location.\n\n" +
+                    $"Would you like VideoStamper to automatically download and install {displayName} to:\n" +
+                    $"{GetToolsInstallDir()}\n\n" +
+                    "You can also choose Skip to locate it manually.",
+                yesText: "Download",
+                noText: "Skip");
+                
 
-        if (shouldAutoInstall)
-        {
-            var ok = await TryAutoInstallFfmpegToolsWithUiAsync();
+                if (shouldAutoInstall)
+                {
+                    var ok = await TryAutoInstallFfmpegToolsWithUiAsync();
 
-            var afterInstallDefault = resolveDefaultPath();
-            if (ok &&
-                !string.IsNullOrWhiteSpace(afterInstallDefault) &&
-                File.Exists(afterInstallDefault))
-            {
-                setTextBox(afterInstallDefault!);
-                saveSetting(afterInstallDefault!);
+                    var afterInstallDefault = resolveDefaultPath();
+                    var afterInstallVersion = latestVer;
+                    if (ok &&
+                        !string.IsNullOrWhiteSpace(afterInstallDefault) &&
+                        File.Exists(afterInstallDefault))
+                    {
+                        setTextBox(afterInstallDefault!);
+                        savePathSetting(afterInstallDefault!);
+                        saveVersionSetting(afterInstallVersion);
+                        return;
+                    }
+
+                    // fall through to manual picker if install failed
+                }
+
+                
+
+
+                // 3. Prompt the user with a modal file picker
+                await PromptForToolAsync(displayName, path, expectedFileNames, setTextBox, savePathSetting, saveVersionSetting);
                 return;
-            }
-
-            // fall through to manual picker if install failed
         }
 
-        
+        if(askToUpdate) {
+            var shouldAutoUpdate = await ShowYesNoDialogAsync(
+                title: $"Update {displayName}",
+                message:
+                    $"A new version of {displayName} is available from {FfmpegZipUrl}.\n\n" +
+                    $"Would you like VideoStamper to automatically download and install the update to {displayName} to:\n" +
+                    $"{GetToolsInstallDir()}\n\n",
+                yesText: "Download",
+                noText: "Skip");
+            if (shouldAutoUpdate)
+            {
+                var ok = await TryAutoInstallFfmpegToolsWithUiAsync();
 
+                var afterInstallDefault = resolveDefaultPath();
+                var afterInstallVersion = latestVer;
+                if (ok &&
+                    !string.IsNullOrWhiteSpace(afterInstallDefault) &&
+                    File.Exists(afterInstallDefault))
+                {
+                    setTextBox(afterInstallDefault!);
+                    savePathSetting(afterInstallDefault!);
+                    saveVersionSetting(afterInstallVersion);
+                    return;
+                }
 
-        // 3. Prompt the user with a modal file picker
-        await PromptForToolAsync(displayName, path, expectedFileNames, setTextBox, saveSetting);
+            }
+        }
+    }
+
+    private string GetCurrentToolVersion(string displayName)
+    {
+        switch(displayName) {
+            case "ffmpeg":
+                return string.IsNullOrWhiteSpace(_settings.FfmpegVersion) ? "" : _settings.FfmpegVersion!.Trim();
+            case "ffprobe":
+                return string.IsNullOrWhiteSpace(_settings.FfprobeVersion) ? "" : _settings.FfprobeVersion!.Trim();
+            case "ffplay":
+                return string.IsNullOrWhiteSpace(_settings.FfplayVersion) ? "" : _settings.FfplayVersion!.Trim();
+            default: return "";
+        }
+    }
+
+    private async Task<string?> GetLatestToolVersion(string displayName)
+    {
+        string responseBody;
+        try
+        {
+            string url;
+            switch(displayName) {
+                case "ffmpeg":
+                    url = FfmpegInfoUrl;
+                    break;
+                case "ffprobe":
+                    url = FfprobeInfoUrl;
+                    break;
+                default: return "!";
+            }
+
+            responseBody = await httpClient.GetStringAsync(url);
+        }
+        catch 
+        {
+            return "!";
+        }
+
+        //parse version file
+        if(OperatingSystem.IsMacOS()) {
+            return ParseFfToolsMac(responseBody, "version");
+            //return responseJson[0].version
+        } else if (OperatingSystem.IsWindows()) {
+            return responseBody;
+        } else if (OperatingSystem.IsLinux()) {
+            if(System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64) {
+                return ParseFfToolsLinuxSHA(responseBody, "ARM");
+            } else {
+                return ParseFfToolsLinuxSHA(responseBody, "x64");
+            }
+        }
+        return "!";
     }
 
     private sealed class ToolInstallProgress
@@ -3159,7 +3354,8 @@ private FontOption? FindFontByName(string name) =>
     string? foundInstead,
     string[] expectedFileNames,
     Action<string> setTextBox,
-    Action<string?> saveSetting)
+    Action<string?> savePathSetting,
+    Action<string?> saveVersionSetting)
     {
         var found = string.IsNullOrWhiteSpace(foundInstead) ? "(unset)" : foundInstead;
         while (true)
@@ -3200,8 +3396,10 @@ private FontOption? FindFontByName(string name) =>
 
             // Looks good — update UI + settings
             setTextBox(path);
-            saveSetting(path);
+            savePathSetting(path);
+            saveVersionSetting("custom");
             AppendStatus($"{displayName} path set to: {path}");
+            AppendStatus($"{displayName} version set to: custom");
             break;
         }
 
@@ -3292,8 +3490,8 @@ private FontOption? FindFontByName(string name) =>
     private async Task<bool> ShowYesNoDialogAsync(
         string title,
         string message,
-        string yesText = "Download",
-        string noText = "Skip")
+        string yesText = "Yes",
+        string noText = "No")
     {
         var tcs = new TaskCompletionSource<bool>();
 
@@ -3421,7 +3619,7 @@ private FontOption? FindFontByName(string name) =>
         {
             var choice = await ShowExitPromptAsync(
                 title: "Quit VideoStamper",
-                message: "Do you want to export your project before quitting?");
+                message: "Do you want to save your project before quitting?");
 
             switch (choice)
             {
@@ -3469,8 +3667,8 @@ private FontOption? FindFontByName(string name) =>
             TextWrapping = Avalonia.Media.TextWrapping.Wrap
         };
 
-        var exportBtn = new Button { Content = "Export & Quit", MinWidth = 120 };
-        var quitBtn = new Button { Content = "Quit Without Exporting", MinWidth = 160 };
+        var exportBtn = new Button { Content = "Save & Quit", MinWidth = 120 };
+        var quitBtn = new Button { Content = "Quit Without Saving", MinWidth = 160 };
         var cancelBtn = new Button { Content = "Cancel", MinWidth = 90 };
 
         exportBtn.Click += (_, __) => { tcs.TrySetResult(ExitPromptResult.ExportAndQuit); dialog.Close(); };
