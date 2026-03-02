@@ -8,15 +8,16 @@ namespace VideoStamper.Core;
 public static class FilterBuilder
 {
 
-    public static string EscapeFFMpegString( string FFString )
-    {
-        return FFString.Replace("'", "\\'")      // escape single quotes
-                                   .Replace("\\", "\\\\\\\\") // escape backslashes
-                                   .Replace(":", "\\\\\\:")   // escape colons for filter syntax
-                                   .Replace(",", "\\\\,")     // escape commas
-                                   .Replace("/", "\\\\/");    // escape forward slash
-    }
+	private static string EscapeFfmpegString(string input)
+	{
+		return input.Replace("'", "\\'")      // escape single quotes
+                    .Replace("\\", "\\\\\\\\") // escape backslashes
+                    .Replace(":", "\\\\\\:")   // escape colons for filter syntax
+                    .Replace(",", "\\\\,")     // escape commas
+                    .Replace("/", "\\\\/");    // escape forward slash
 
+	}
+	
     public static string BuildFilterComplexForInput(
         InputSettings input,
         VideoMetadata meta
@@ -180,7 +181,7 @@ public static class FilterBuilder
         string ffmpegFormat = ConvertTimeFormat(ts.Format);
 
         // 2. Support multi-line format strings
-        ffmpegFormat = EscapeFFMpegString( ffmpegFormat );
+        ffmpegFormat = EscapeFfmpegString(ffmpegFormat);
 
         string[] newlines = ffmpegFormat.Split(
             Environment.NewLine,
@@ -188,8 +189,6 @@ public static class FilterBuilder
         );
 
         var drawTexts = new Dictionary<string, List<DrawText>>();
-
-        string FontFile = EscapeFFMpegString(ts.Font.FontFile);
 
         foreach (string format in newlines)
         {
@@ -223,7 +222,7 @@ public static class FilterBuilder
 
             DrawText filter = new DrawText(
                 text,
-                FontFile,
+                EscapeFfmpegString(ts.Font.FontFile),
                 ts.Font.Size,
                 ts.Font.Color,
                 xExpr,
@@ -255,9 +254,7 @@ public static class FilterBuilder
 
         // Support multi-line format strings
         text = EscapeFFMpegString( text );
-        //escape font file string for windows paths
-        string FontFile = EscapeFFMpegString(sub.Font.FontFile);
-        
+
         string[] newlines = text.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         
         var drawTexts = new Dictionary<string, List<DrawText>>();
@@ -299,7 +296,8 @@ public static class FilterBuilder
                 oad = sub.AnimationOutDur;
             }
 
-            DrawText filter = new DrawText(newtext, FontFile, sub.Font.Size, sub.Font.Color, xExpr, yExpr, bc, bw, start, end, ia, iad, oa, oad);
+
+            DrawText filter = new DrawText(newtext, EscapeFfmpegString(sub.Font.FontFile), sub.Font.Size, sub.Font.Color, xExpr, yExpr, bc, bw, start, end, ia, iad, oa, oad);
             filter.XCoord = xc;
             filter.YCoord = yc;
 
